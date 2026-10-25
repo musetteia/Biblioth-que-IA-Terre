@@ -417,3 +417,16 @@ textarea.saisie { resize: vertical; line-height: 1.5; }
 .bouton.lien-geant { font-size: clamp(20px, 2.8vw, 26px); }
 @media (prefers-reduced-motion: reduce) { .barre-envoi span, .etapes-envoi .en-cours .marque-etape { animation-duration: 3s; } }
 @media (max-width: 560px) { .ecran-envoi .pastille { width: 120px; height: 120px; font-size: 74px; } .actions-ecran { flex-direction: column; align-items: stretch; width: 100%; } .marque-etape { width: 44px; height: 44px; font-size: 24px; } }
+
+/* Dépôt d'un fichier dans le formulaire (glisser-déposer ou bouton) */
+.zone-depot { display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; padding: 20px 16px; border: 2px dashed var(--trait-fort); border-radius: 14px; background: var(--bande); }
+.zone-depot.survol { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, var(--surface)); }
+.zone-depot-titre { margin: 0; font-weight: 700; font-size: 19px; }
+.zone-depot-aide { margin: 0; font-size: 14px; color: var(--discret); max-width: 52ch; }
+.zone-depot .bouton { min-height: 40px; font-size: 15px; }
+.retour-fichier { padding: 10px 14px; border-radius: 12px; border-left: 4px solid var(--vert); background: color-mix(in srgb, var(--vert) 10%, var(--surface)); font-size: 15px; }
+.retour-fichier p { margin: 0 0 4px; }
+.retour-fichier p:last-of-type { margin-bottom: 0; }
+.retour-fichier.attention { border-left-color: var(--ambre); background: color-mix(in srgb, var(--ambre) 12%, var(--surface)); }
+.retour-fichier.erreur { border-left-color: var(--rouge); background: color-mix(in srgb, var(--rouge) 10%, var(--surface)); }
+.retour-fichier .bouton.lien { padding: 0; min-height: 28px; }
