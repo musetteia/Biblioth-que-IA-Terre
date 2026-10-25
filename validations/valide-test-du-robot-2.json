@@ -1,0 +1,72 @@
+{
+  "format": "bibliotheque-ia-terre/proposition",
+  "version": 1,
+  "titre": "Test du robot 2",
+  "resume": "Prompt d'essai pour vérifier la chaîne de dépôt, de validation et d'intégration. À ne pas publier.",
+  "type": "prompt",
+  "usage": "synthese",
+  "niveau": "debutant",
+  "langue": "fr",
+  "ia_compatibles": [
+    "claude"
+  ],
+  "etiquettes": "test, resume, essai",
+  "auteur": "testeur",
+  "probleme": "Dépôt d'essai, destiné à vérifier la chaîne de la bibliothèque (formulaire, boîte de dépôt, validation, robot). Le prompt demande un résumé en cinq points d'un texte fourni, sans ajout d'information.",
+  "donne": "Un texte à résumer, collé à la suite du prompt.",
+  "recoit": "Un résumé en cinq points courts.",
+  "limites": "Dépôt de test : à ne pas publier.\nLe contenu garde des résidus d'épuration (« [personne] », « [numéro retiré] »).\nLe prompt ne précise ni la longueur des points ni le public visé.",
+  "contenu": "Résume le texte ci-dessous en cinq points courts, sans rien inventer.\nContact : [personne], [numéro retiré].",
+  "etapes": [
+    {
+      "titre": "Coller le prompt et le texte",
+      "qui": "vous",
+      "entree": "Le prompt et le texte à résumer",
+      "sortie": "Une demande complète envoyée à l'IA"
+    },
+    {
+      "titre": "Résumer en cinq points",
+      "qui": "ia",
+      "entree": "Le texte",
+      "sortie": "Cinq points courts"
+    },
+    {
+      "titre": "Relire le résumé",
+      "qui": "vous",
+      "entree": "Les cinq points",
+      "sortie": "Un résumé vérifié"
+    }
+  ],
+  "exemple_entree": "Texte fictif : la réunion de rentrée fixe trois priorités, un calendrier et deux points à revoir.",
+  "exemple_sortie": "1. Trois priorités fixées.\n2. Un calendrier adopté.\n3. Deux points à revoir.\n4. Aucune décision budgétaire.\n5. Prochaine réunion à fixer.",
+  "controles": [
+    "aucune-donnee-reelle",
+    "exemples-fictifs",
+    "aucun-nom-adresse",
+    "aucun-appel-reseau"
+  ],
+  "validation": {
+    "par": "Adrian",
+    "date": "2026-10-25T19:02:12+01:00",
+    "avec_ia": true,
+    "champs_completes_par_ia": [
+      "usage",
+      "niveau",
+      "langue",
+      "etiquettes",
+      "probleme",
+      "donne",
+      "recoit",
+      "limites",
+      "etapes",
+      "exemple_entree",
+      "exemple_sortie"
+    ],
+    "propositions_ia_ignorees": [],
+    "retraits_automatiques": {},
+    "retraits_dans_complements_ia": {},
+    "alertes": [],
+    "notes": "Dépôt de test de la chaîne : ne pas fusionner. Le contenu garde « [personne] » et « [numéro retiré] » (épuration faite par le formulaire).",
+    "contenu_sha256": "e4fbe6921a11caa1efeddb10c9fe0c94dc21bbf3db32affaae5f800e83ad39cd"
+  }
+}
