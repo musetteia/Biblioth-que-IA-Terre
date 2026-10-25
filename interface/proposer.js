@@ -17,10 +17,10 @@
     script: 'Un petit programme Python qui travaille sur des fichiers.'
   };
   var CONTENU = {
-    prompt: ['Le prompt', 'Collez ici le texte du prompt, tel que l\'utilisateur le collera dans l\'IA.'],
-    projet: ['Les instructions du projet', 'Collez ici les instructions à donner à l\'IA (étape par étape, avec les garde-fous).'],
-    skill: ['Le contenu du skill', 'Collez ici le contenu du fichier SKILL.md. L\'en-tête (nom, description) sera ajouté si vous l\'oubliez.'],
-    script: ['Le code Python', 'Collez ici le code complet. Il ne doit utiliser aucun accès réseau ni lancer de commande système.']
+    prompt: ['Le prompt', 'Le texte du prompt, tel que l\'utilisateur le collera dans l\'IA : glissez votre fichier dans le cadre ci-dessous, ou collez le texte.'],
+    projet: ['Les instructions du projet', 'Les instructions à donner à l\'IA (étape par étape, avec les garde-fous) : glissez votre fichier dans le cadre ci-dessous, ou collez le texte.'],
+    skill: ['Le contenu du skill', 'Glissez le .zip du skill ou son fichier SKILL.md dans le cadre ci-dessous, ou collez le contenu de SKILL.md. L\'en-tête (nom, description) sera ajouté si vous l\'oubliez.'],
+    script: ['Le code Python', 'Le code complet : glissez votre fichier .py dans le cadre ci-dessous, ou collez le code. Il ne doit utiliser aucun accès réseau ni lancer de commande système.']
   };
 
   // ---- petits outils DOM ---------------------------------------------------
@@ -83,6 +83,17 @@
   var contenuAide = el('p', { classe: 'champ-aide', id: 'contenu-aide' });
   var contenuZone = zone(14, '', true); contenuZone.id = 'contenu'; contenuZone.setAttribute('aria-describedby', 'contenu-aide');
 
+  // Zone de dépôt d'un fichier : le fichier est lu dans ce navigateur et recopié dans le champ « contenu ».
+  // Rien n'est envoyé avant le clic sur « Envoyer ».
+  var choixFichier = el('input', { type: 'file', id: 'fichier-contenu', classe: 'sr-only', tabindex: '-1', accept: '.md,.txt,.py,.zip,.json,.yaml,.yml,.csv,text/plain,text/markdown' });
+  var boutonFichier = el('button', { type: 'button', classe: 'bouton secondaire', id: 'choisir-fichier', texte: 'Choisir un fichier' });
+  var depot = el('div', { classe: 'zone-depot', id: 'zone-depot' }, [
+    el('p', { classe: 'zone-depot-titre', texte: 'Glissez ici votre fichier' }),
+    el('p', { classe: 'zone-depot-aide', texte: 'Prompt ou instructions en .md ou .txt, script en .py, skill en .zip ou SKILL.md. Vous pouvez aussi copier-coller le texte dans le champ ci-dessous.' }),
+    boutonFichier, choixFichier
+  ]);
+  var retourFichier = el('div', { classe: 'retour-fichier', id: 'retour-fichier', role: 'status', 'aria-live': 'polite', hidden: 'hidden' });
+
   var erreursZone = el('div', { id: 'erreurs', classe: 'erreurs-form', role: 'alert', hidden: 'hidden' });
   var resultat = el('div', { id: 'resultat', classe: 'resultat-form', hidden: 'hidden' });
 
@@ -98,7 +109,7 @@
       el('div', { classe: 'champ' }, [el('span', { classe: 'champ-titre', id: 'ia-titre' }, [el('span', { texte: 'Testé avec' }), el('span', { classe: 'requis', texte: ' (obligatoire)' })]), el('p', { classe: 'champ-aide', texte: 'Cochez les IA avec lesquelles vous l\'avez testé. « Toutes les IA » si le projet est générique.' }), iaBoites])
     ]),
     section('2. Le contenu (obligatoire)', 'C\'est le cœur du projet : ce que les camarades vont copier.', [
-      el('div', { classe: 'champ' }, [el('label', { 'for': 'contenu', classe: 'champ-titre' }, [contenuLabel, el('span', { classe: 'requis', texte: ' (obligatoire)' })]), contenuAide, contenuZone])
+      el('div', { classe: 'champ' }, [el('label', { 'for': 'contenu', classe: 'champ-titre' }, [contenuLabel, el('span', { classe: 'requis', texte: ' (obligatoire)' })]), contenuAide, depot, retourFichier, contenuZone])
     ]),
     section('3. Vos engagements (obligatoire)', 'Vous certifiez avoir vérifié ces quatre points. Ils s\'affichent sur la fiche.', [attestations]),
     section('4. Pour compléter la fiche (facultatif)', 'Vous pouvez tout laisser vide. Ce que vous renseignez ici sera repris tel quel ; le reste sera proposé par la personne qui relit.', [
@@ -484,6 +495,161 @@
     if (!window.confirm('Effacer tout ce que vous avez saisi ?')) { return; }
     reinitialiser();
   });
+
+  // ---- dépôt d'un fichier (glisser-déposer ou bouton) ---------------------
+  var EXT_TEXTE = ['md', 'markdown', 'txt', 'py', 'json', 'yaml', 'yml', 'csv'];
+  var TAILLE_MAX = 150000;   // caractères : la boîte de dépôt refuse les dépôts de plus de 200 Ko
+  var ancienContenu = null;
+
+  function extension(nom) { var m = /\.([^.\/]+)$/.exec(nom || ''); return m ? m[1].toLowerCase() : ''; }
+  function lireTexte(f) {
+    return new Promise(function (ok, ko) {
+      var r = new FileReader(); r.onload = function () { ok(String(r.result).replace(/^\uFEFF/, '')); }; r.onerror = ko; r.readAsText(f, 'utf-8');
+    });
+  }
+  function lireOctets(f) {
+    return new Promise(function (ok, ko) {
+      var r = new FileReader(); r.onload = function () { ok(r.result); }; r.onerror = ko; r.readAsArrayBuffer(f);
+    });
+  }
+
+  function message(lignes, genre, annulable) {
+    retourFichier.textContent = '';
+    retourFichier.className = 'retour-fichier ' + (genre || 'ok');
+    lignes.forEach(function (l) { if (l) { retourFichier.appendChild(el('p', { texte: l })); } });
+    if (annulable) {
+      var b = el('button', { type: 'button', classe: 'bouton lien', texte: 'Annuler : remettre le texte précédent' });
+      b.addEventListener('click', function () {
+        contenuZone.value = ancienContenu || ''; ancienContenu = null; sauver();
+        message(['Le texte précédent est revenu.'], 'ok', false);
+      });
+      retourFichier.appendChild(b);
+    }
+    retourFichier.hidden = false;
+  }
+
+  function choisirType(t) {
+    if (!t || typeChoisi() === t) { return false; }
+    var r = formulaire.querySelector('input[name=type][value="' + t + '"]');
+    if (!r) { return false; }
+    r.checked = true; majContenu(); return true;
+  }
+
+  function placer(texte, nom, type, avertissement) {
+    if (!texte.trim()) { message(['« ' + nom + ' » est vide : rien n\'a été chargé.'], 'erreur'); return; }
+    if (texte.length > TAILLE_MAX) {
+      message(['« ' + nom + ' » est trop long (' + texte.length + ' caractères, ' + TAILLE_MAX + ' au maximum). Raccourcissez-le, ou gardez l\'essentiel et signalez le reste dans le résumé.'], 'erreur');
+      return;
+    }
+    var remplace = contenuZone.value.trim() !== '' && contenuZone.value !== texte;
+    ancienContenu = remplace ? contenuZone.value : null;
+    contenuZone.value = texte;
+    var change = choisirType(type);
+    sauver();
+    message([
+      '« ' + nom + ' » est chargé dans le champ ci-dessous (' + texte.length + ' caractères). Relisez-le : c\'est ce texte qui sera envoyé.',
+      change ? 'Le type de projet a été réglé sur « ' + V.type[type] + ' ».' : '',
+      avertissement || ''
+    ], avertissement ? 'attention' : 'ok', remplace);
+  }
+
+  // Lecture d'un .zip : on n'en garde que SKILL.md (le formulaire n'envoie que du texte).
+  function lireZip(f) {
+    if (typeof DecompressionStream === 'undefined') {
+      message(['Ce navigateur ne sait pas ouvrir les fichiers .zip. Ouvrez le .zip sur votre ordinateur, puis glissez ici le fichier SKILL.md qu\'il contient.'], 'erreur');
+      return;
+    }
+    lireOctets(f).then(function (tampon) {
+      var v = new DataView(tampon), n = tampon.byteLength, fin = -1;
+      for (var i = n - 22; i >= Math.max(0, n - 65557); i--) { if (v.getUint32(i, true) === 0x06054b50) { fin = i; break; } }
+      if (fin < 0) { throw new Error('zip'); }
+      var nb = v.getUint16(fin + 10, true), pos = v.getUint32(fin + 16, true), entrees = [];
+      var dec = new TextDecoder('utf-8');
+      for (var k = 0; k < nb; k++) {
+        if (v.getUint32(pos, true) !== 0x02014b50) { throw new Error('zip'); }
+        var lNom = v.getUint16(pos + 28, true), lExtra = v.getUint16(pos + 30, true), lCom = v.getUint16(pos + 32, true);
+        entrees.push({
+          nom: dec.decode(new Uint8Array(tampon, pos + 46, lNom)), drapeaux: v.getUint16(pos + 8, true),
+          methode: v.getUint16(pos + 10, true), taille: v.getUint32(pos + 20, true), brut: v.getUint32(pos + 24, true),
+          local: v.getUint32(pos + 42, true)
+        });
+        pos += 46 + lNom + lExtra + lCom;
+      }
+      var fichiers = entrees.filter(function (e) { return !/\/$/.test(e.nom) && !/(^|\/)(__MACOSX\/|\.DS_Store$)/.test(e.nom); });
+      var skills = fichiers.filter(function (e) { return /(^|\/)SKILL\.md$/i.test(e.nom); })
+        .sort(function (a, b) { return a.nom.split('/').length - b.nom.split('/').length; });
+      if (!skills.length) {
+        message(['Ce .zip ne contient pas de fichier SKILL.md. Glissez plutôt le fichier texte de votre prompt, de vos instructions ou de votre script.'], 'erreur');
+        return null;
+      }
+      var s = skills[0];
+      if (s.drapeaux & 1) { message(['Ce .zip est protégé par un mot de passe : il ne peut pas être lu.'], 'erreur'); return null; }
+      if (s.brut > TAILLE_MAX) { message(['Le SKILL.md de ce .zip est trop long (' + s.brut + ' octets, ' + TAILLE_MAX + ' au maximum).'], 'erreur'); return null; }
+      var debut = s.local + 30 + v.getUint16(s.local + 26, true) + v.getUint16(s.local + 28, true);
+      var octets = new Uint8Array(tampon, debut, s.taille);
+      var lecture;
+      if (s.methode === 0) { lecture = Promise.resolve(octets); }
+      else if (s.methode === 8) {
+        lecture = new Response(new Blob([octets]).stream().pipeThrough(new DecompressionStream('deflate-raw'))).arrayBuffer()
+          .then(function (b) { return new Uint8Array(b); });
+      } else { throw new Error('zip'); }
+      var autres = fichiers.filter(function (e) { return e !== s; }).map(function (e) { return e.nom.split('/').pop(); });
+      return lecture.then(function (o) {
+        var texte = dec.decode(o).replace(/^\uFEFF/, '');
+        var avert = autres.length
+          ? 'Ce skill contient aussi ' + autres.length + ' autre' + (autres.length > 1 ? 's fichiers' : ' fichier') + ' (' + autres.slice(0, 5).join(', ') + (autres.length > 5 ? '…' : '') +
+            ') : le formulaire n\'envoie que SKILL.md. Indiquez-le dans le résumé et laissez une adresse de contact (partie 7) : la personne qui relit vous demandera le reste.'
+          : '';
+        placer(texte, s.nom.split('/').pop() + ' (extrait de ' + f.name + ')', 'skill', avert);
+      });
+    }).catch(function () {
+      message(['Ce .zip n\'a pas pu être lu. Ouvrez-le sur votre ordinateur, puis glissez ici le fichier SKILL.md qu\'il contient.'], 'erreur');
+    });
+  }
+
+  function lireFichier(f) {
+    if (!f) { return; }
+    var ext = extension(f.name);
+    if (ext === 'zip') { lireZip(f); return; }
+    if (EXT_TEXTE.indexOf(ext) < 0 && !/^text\//.test(f.type || '')) {
+      message(['Les fichiers .' + (ext || '?') + ' ne peuvent pas être lus ici (Word, PDF, images…). Ouvrez le document et copiez-collez son texte dans le champ ci-dessous.'], 'erreur');
+      return;
+    }
+    if (f.size > TAILLE_MAX * 4) { message(['« ' + f.name + ' » est trop lourd pour le formulaire.'], 'erreur'); return; }
+    lireTexte(f).then(function (texte) {
+      var type = ext === 'py' ? 'script' : (/^SKILL\.md$/i.test(f.name) ? 'skill' : '');
+      placer(texte, f.name, type, '');
+    }).catch(function () { message(['« ' + f.name + ' » n\'a pas pu être lu.'], 'erreur'); });
+  }
+
+  function aDesFichiers(ev) {
+    var types = ev.dataTransfer && ev.dataTransfer.types;
+    return !!types && Array.prototype.indexOf.call(types, 'Files') >= 0;
+  }
+  [depot, contenuZone].forEach(function (cible) {
+    cible.addEventListener('dragover', function (ev) {
+      if (!aDesFichiers(ev)) { return; }
+      ev.preventDefault(); ev.dataTransfer.dropEffect = 'copy'; depot.classList.add('survol');
+    });
+    cible.addEventListener('dragleave', function () { depot.classList.remove('survol'); });
+    cible.addEventListener('drop', function (ev) {
+      if (!aDesFichiers(ev)) { return; }
+      ev.preventDefault(); ev.stopPropagation(); depot.classList.remove('survol');
+      var fs = ev.dataTransfer.files;
+      if (fs.length > 1) { message(['Un seul fichier à la fois : seul « ' + fs[0].name + ' » a été pris.'], 'attention'); }
+      lireFichier(fs[0]);
+    });
+  });
+  // Un fichier lâché à côté de la zone ne doit pas faire quitter la page (le navigateur l'ouvrirait).
+  window.addEventListener('dragover', function (ev) { if (aDesFichiers(ev)) { ev.preventDefault(); } });
+  window.addEventListener('drop', function (ev) {
+    if (!aDesFichiers(ev)) { return; }
+    ev.preventDefault();
+    message(['Lâchez le fichier dans le cadre « Glissez ici votre fichier », dans la partie 2.'], 'attention');
+    depot.scrollIntoView({ block: 'center' });
+  });
+  boutonFichier.addEventListener('click', function () { choixFichier.click(); });
+  choixFichier.addEventListener('change', function () { lireFichier(choixFichier.files[0]); choixFichier.value = ''; });
 
   // ---- démarrage -------------------------------------------------------
   if (!restaurer()) { ajouterEtape(); ajouterEtape(); }

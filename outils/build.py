@@ -478,7 +478,7 @@ class Constructeur:
     def construire_proposer(self):
         intro = (
             "Vous avez un prompt, un skill, un script ou un projet qui sert ? Partagez-le en remplissant ce formulaire. "
-            "Pas de compte, pas d'installation : tout reste dans votre navigateur jusqu'à ce que vous téléchargiez le fichier. "
+            "Pas de compte, pas d'installation : glissez votre fichier ou collez votre texte, rien ne part avant que vous cliquiez sur « Envoyer ». "
             "Utilisez uniquement des exemples fictifs."
         )
         contenu = (
