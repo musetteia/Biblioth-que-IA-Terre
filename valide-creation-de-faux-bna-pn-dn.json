@@ -1,0 +1,82 @@
+{
+  "format": "bibliotheque-ia-terre/proposition",
+  "version": 1,
+  "titre": "Création de faux BNA PN DN",
+  "resume": "Skill Claude qui génère des BNAPN et BNADN fictifs, identiques en forme et en fonctionnement aux vrais formulaires Adobe. Pour tester, former ou démontrer les outils de notation (import_bna, extraction_bna) sans aucune donnée réelle. Chaque faux est marqué FICTIF.",
+  "type": "projet",
+  "usage": "code-scripts",
+  "niveau": "intermediaire",
+  "langue": "fr",
+  "ia_compatibles": [
+    "claude"
+  ],
+  "etiquettes": "BNA, notation, données fictives, PDF",
+  "auteur": "JF",
+  "probleme": "Tester import_bna.html et extraction_bna.html exige des BNA qui se comportent comme de vrais formulaires Adobe, mais une vraie notation ne doit jamais servir de jeu d'essai. Ce skill fabrique des BNAPN et BNADN fictifs, marqués FICTIF, sans aucune donnée réelle, pour tester, former et démontrer devant un public. Il s'adresse aux concepteurs d'outils de notation et aux formateurs.",
+  "donne": "Nombre de militaires (100 maximum par lot), répartition par grade, campagne, code d'unité fictif pour le nom des fichiers, et éventuellement le classeur modele_notation.xlsx à pré-remplir.",
+  "recoit": "Une paire BNAPN/BNADN vierge par militaire, au format de nommage réel, marquée FICTIF ; un fichier identites.xlsx (nom, prénom, grade, genre, catégorie, matricule fictif, noms de fichiers) ; le classeur de notation pré-rempli si demandé.",
+  "limites": "Documents maîtres issus du formulaire BNA en vigueur en 2018 ; à refaire si le formulaire évolue.\nRendu pdf.js proche d'Adobe sans garantie ; seul Adobe sur Intradef fait foi.\nAdobe Reader peut refuser d'enregistrer les faux (signature droits Reader absente).\nDépendances : pypdf, lxml, openpyxl ; qpdf facultatif.\nContrôle visuel (rendu_bna.py, facultatif) : l'utilisateur installe une fois pdf.js (paquet npm pdfjs-dist, version 4.10.38) et Playwright avec Chromium ; aucun script ne télécharge rien ni ne contacte de service extérieur.\nFaux pour test uniquement : ne jamais les introduire dans un circuit réel.\nLe skill complet (SKILL.md, scripts/, maitres/) est fourni dans le zip joint au projet ; le champ contenu ne reprend que le SKILL.md.",
+  "contenu": "---\nname: creation-faux-bna\ndescription: \"Création de faux BNA PN DN : génère des BNAPN et BNADN fictifs, identiques en forme et en fonctionnement aux vrais formulaires Adobe, pour tester les outils de notation (import_bna, extraction_bna) sans aucune donnée réelle.\"\n---\n\n# Création de faux BNA PN DN — v1.1\n\n## Objectif\n\nProduire des **BNA de test** (BNAPN et BNADN) qui se comportent exactement comme de vrais BNA dans les outils `import_bna.html` et `extraction_bna.html`, sans jamais contenir de donnée réelle. Usage : tester, former, démontrer.\n\n## Règles absolues\n\n1. **Jamais de donnée réelle dans un faux.** Les faux sont fabriqués uniquement à partir des **maîtres fictifs** du dossier `maitres/`.\n2. **Tout faux est marqué FICTIF** : titre du PN « BULLETIN DE NOTATION ANNUELLE — DOCUMENT FICTIF » en rouge ; bandeau rouge « BNADN — DOCUMENT FICTIF — TEST UNIQUEMENT » et nom du militaire sur le DN ; « (FICTIF) » à côté du nom sur le PN. Ne jamais retirer ce marquage.\n3. **Faux numéros** : matricule, NI, identifiants SAP sont inventés (préfixes 91… et 8…), uniques par militaire.\n4. **Usage de test uniquement** : ne jamais introduire un faux dans un circuit réel (Concerto, GE, signatures).\n5. Si l'utilisateur fournit un **vrai BNA** (pour refaire un maître) : ne jamais afficher son contenu, ne jamais le copier dans une sortie, supprimer les copies de travail à la fin.\n\n## Contenu du skill\n\n| Fichier | Rôle |\n|---|---|\n| `maitres/BNAPN_maitre_FICTIF.pdf` | Maître PN vierge, identité MAITRE Fictif |\n| `maitres/BNADN_maitre_FICTIF.pdf` | Maître DN vierge |\n| `scripts/faux_bna.py` | Génération des lots, création d'un nouveau maître, contrôle anti-fuite |\n| `scripts/rendu_bna.py` | Capture PNG d'un BNA tel qu'Adobe l'affiche (pdf.js) |\n\nDépendances : `pypdf`, `lxml`, `openpyxl` (pip, avec `--break-system-packages` si besoin) ; `qpdf` facultatif (compacte les PDF) ; pour le rendu : Python `playwright` avec Chromium et pdf.js (paquet npm `pdfjs-dist`, version 4.10.38), à installer une fois par l'utilisateur dans `~/.cache/rendu_bna` ou dans un autre dossier passé par `--dossier-pdfjs` (commande exacte affichée par `rendu_bna.py`). Aucun script ne télécharge quoi que ce soit ni ne contacte un service extérieur.\nToujours lancer les scripts avec `python3 -I`, en copiant d'abord le dossier du skill dans le répertoire de travail si le chemin du skill est en lecture seule.\n\n## Déroulé\n\n### 1. Recueillir le besoin (en un seul message)\n- Nombre de militaires (100 au maximum par lot, gabarit des outils de notation).\n- Répartition par grade (ex. : CPL 10, CCH 5, SGT 3) ; à défaut, tous CPL.\n- Campagne (année, défaut : année en cours) et code d'unité pour le nom des fichiers (défaut `FIC_TST`).\n- Classeur `modele_notation.xlsx` à pré-remplir (noms réels fictifs, prénoms, grades, genre, catégorie) : oui / non.\n\n### 2. Générer le lot\n```bash\npython3 -I scripts/faux_bna.py lot --n 18 --grades CPL:10,CCH:5,SGT:3 --annee 2026 --unite FIC_TST \\\n        [--modele modele_notation.xlsx] [--debut 1] --sortie lot_fictif/\n```\nProduit :\n- `NN_AAAA_BNAPN_GRADE_Nom_UNITE.pdf` et `NN_AAAA_BNADN_…` : une paire vierge par militaire, au format de nommage réel ;\n- `identites.xlsx` : nom, prénom, grade, genre, catégorie, matricule fictif, noms des deux fichiers ;\n- `notation_lot_fictif.xlsx` (si `--modele`) : le classeur de notation avec « Nom réel », « Prénom », « Grade », « Genre », « Catégorie » remplis. Les autres colonnes (pseudo, cotations, textes) restent à remplir, par exemple avec le skill notation-bna.\n- `--debut` décale la numérotation pour enchaîner plusieurs lots sans doublon.\n\nFemmes : un militaire sur cinq (prénom féminin, genre F). Noms : liste de patronymes courants, suffixés au-delà de 50.\n\n### 3. Contrôler\n- Contrôle anti-fuite, si un vrai BNA de référence est disponible :\n  `python3 -I scripts/faux_bna.py controle --reference vrai_PN.pdf vrai_DN.pdf --fichiers lot_fictif/*.pdf` → doit afficher « AUCUNE fuite ».\n- Contrôle visuel : `python3 -I scripts/rendu_bna.py lot_fictif/<fichier>.pdf capture.png`, puis regarder la capture (titre ou bandeau FICTIF, nom, NI, millésime). Si pdf.js n'est pas installé, le script s'arrête et indique la commande à lancer : la proposer à l'utilisateur, ne pas l'installer à sa place.\n\n### 4. Livrer\nEnvoyer les PDF (zip conseillé) et `identites.xlsx`. Rappeler : faux pour test uniquement ; enregistrement possible dans Acrobat Pro et par les outils HTML ; Adobe Reader peut refuser d'enregistrer (signature « droits Reader » absente des faux).\n\n## Refaire un maître (formulaire BNA modifié)\n\nSeulement si l'utilisateur signale un changement du formulaire et fournit un vrai BNAPN et un vrai BNADN récents :\n```bash\npython3 -I scripts/faux_bna.py maitre --pn vrai_PN.pdf --dn vrai_DN.pdf --sortie maitres/\n```\nLe script :\n- garde la structure (libellés, codes, arborescence) par **liste blanche** et efface tout le reste (identité, NIR, état civil, famille, unité, cotations, textes) ;\n- supprime le paquet « form » (copie des valeurs) et la signature Reader ;\n- réécrit le fichier en entier (les anciennes révisions disparaissent) ;\n- ajoute le marquage FICTIF et l'identité MAITRE Fictif ;\n- vérifie qu'aucune valeur réelle ne subsiste, y compris dans les flux décompressés ; en cas de fuite : **échec, maître inutilisable**.\n\nPuis : contrôle visuel des deux maîtres avec `rendu_bna.py`, et livraison du skill mis à jour (nouveaux maîtres dans `maitres/`, version incrémentée).\n\n## Ce que les faux permettent de tester\n\n- `import_bna.html` : rattachement par nom réel, remplacement du pseudo, écriture et relecture, garde-fous, noms de fichiers conservés, charge (jusqu'à 500 militaires testés).\n- `extraction_bna.html` : lecture, rapprochement PN/DN par matricule et année, analyse, export.\n- Rendu : après import, `rendu_bna.py` montre les croix, la QSR, la CCPG, les textes et le notateur à leur place.\n\n## Limites connues\n\n- Les maîtres viennent du formulaire BNA en vigueur en 2018, réputé inchangé ; à refaire si le formulaire évolue.\n- Rendu pdf.js : très proche d'Adobe, sans garantie absolue ; seul Adobe sur Intradef fait foi.\n- Le BNADN n'occupe que le bas de la page (comme le vrai) ; le bandeau FICTIF et le nom y ont été ajoutés au-dessus du formulaire.\n\n## Journal des versions\n- **v1.1** (octobre 2026) : `rendu_bna.py` n'installe plus pdf.js lui-même ; l'utilisateur l'installe une fois, et aucun script ne contacte de service extérieur.\n- **v1.0** (octobre 2026) : maîtres PN et DN fictifs ; génération de lots au nommage réel avec identités et classeur pré-rempli ; marquage FICTIF (titre PN, bandeau et nom DN, « (FICTIF) » à côté du nom) ; faux matricules, NI et identifiants SAP ; contrôle anti-fuite ; création d'un maître à partir de vrais BNA ; rendu visuel par pdf.js.\n",
+  "etapes": [
+    {
+      "qui": "vous",
+      "titre": "Recueil du besoin",
+      "entree": "Nombre de militaires, grades, campagne, code d'unité, classeur oui/non",
+      "sortie": "Paramètres du lot",
+      "texte": "L'utilisateur donne ses besoins en un seul message. À défaut : tous CPL, année en cours, unité FIC_TST.",
+      "exemple": "18 militaires : CPL 10, CCH 5, SGT 3, campagne 2026, unité FIC_TST."
+    },
+    {
+      "qui": "ia",
+      "titre": "Génération du lot",
+      "entree": "Paramètres du lot et maîtres fictifs",
+      "sortie": "PDF PN/DN par militaire, identites.xlsx, classeur pré-rempli",
+      "texte": "Claude lance faux_bna.py. Noms courants, une femme sur cinq, faux matricules et NI uniques.",
+      "exemple": "01_2026_BNAPN_CPL_Bernard_FIC_TST.pdf et 01_2026_BNADN_CPL_Bernard_FIC_TST.pdf."
+    },
+    {
+      "qui": "ia",
+      "titre": "Contrôle anti-fuite",
+      "entree": "Lot généré et, si disponible, un vrai BNA de référence",
+      "sortie": "Verdict de contrôle",
+      "texte": "Claude compare les faux au vrai BNA. Le résultat attendu est « AUCUNE fuite ».",
+      "exemple": "36 fichiers contrôlés : AUCUNE fuite."
+    },
+    {
+      "qui": "ia",
+      "titre": "Contrôle visuel",
+      "entree": "Un PDF du lot",
+      "sortie": "Capture PNG du BNA",
+      "texte": "Claude affiche le BNA comme Adobe (pdf.js) et vérifie le marquage FICTIF, le nom, le NI et le millésime.",
+      "exemple": "Capture montrant le titre rouge DOCUMENT FICTIF et « Bernard (FICTIF) »."
+    },
+    {
+      "qui": "vous",
+      "titre": "Livraison et test",
+      "entree": "Zip des PDF et identites.xlsx",
+      "sortie": "BNA de test chargés dans les outils de notation",
+      "texte": "L'utilisateur charge les faux dans import_bna.html ou extraction_bna.html pour tester.",
+      "exemple": "Import de 18 notations fictives puis relecture dans extraction_bna.html."
+    }
+  ],
+  "exemple_entree": "Génère un lot de 3 faux BNA : CPL 2, SGT 1, campagne 2026, unité FIC_TST, sans classeur.",
+  "exemple_sortie": "6 PDF : 01_2026_BNAPN_CPL_Bernard_FIC_TST.pdf, 01_2026_BNADN_CPL_Bernard_FIC_TST.pdf, puis les paires 02_…_CPL_Thomas_FIC_TST et 03_…_SGT_Petit_FIC_TST, tous marqués FICTIF, et identites.xlsx avec 3 lignes (matricules fictifs 91…).",
+  "controles": [
+    "aucune-donnee-reelle",
+    "exemples-fictifs",
+    "aucun-nom-adresse",
+    "aucun-appel-reseau"
+  ],
+  "validation": {
+    "par": "JF",
+    "date": "2026-10-30T09:17:36+01:00",
+    "avec_ia": true,
+    "champs_completes_par_ia": [],
+    "propositions_ia_ignorees": [],
+    "retraits_automatiques": {},
+    "retraits_dans_complements_ia": {},
+    "alertes": [],
+    "notes": "Projet multi-fichiers : le skill complet (SKILL.md, scripts/, maitres/) est livré dans creation-faux-bna.zip, à déposer avec ce fichier ; le champ contenu ne reprend que le SKILL.md v1.1. Auteur et validateur sont la même personne : une relecture par un tiers est souhaitable avant fusion.",
+    "contenu_sha256": "1ce7c21b5416fd019fdc4c19d4dc752c9801d0dfedfd5f0cad6116fe708c6352"
+  }
+}
