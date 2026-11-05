@@ -17,6 +17,7 @@ Durée : environ 10 minutes. À faire **avec la nouvelle adresse Google dédiée
 1. Roue crantée **Paramètres du projet** (à gauche), tout en bas : **Propriétés du script**, **Modifier les propriétés du script**.
 2. La propriété `VALIDATEURS` existe déjà. Remplacez sa valeur par l'adresse qui doit recevoir les dépôts. Plusieurs adresses : séparez-les par des virgules, sans autre signe.
 3. Plus tard, pour passer à l'adresse commune des validateurs : modifiez cette même valeur. Il n'y a rien d'autre à changer, ni dans le script ni sur le site.
+4. **Qui peut déposer.** Seules les adresses `@intradef.gouv.fr` et `@academie.def.gouv.fr` (domaine exact, sans sous-domaine) peuvent recevoir un code et déposer. Les adresses de `VALIDATEURS` sont dispensées de cette règle de domaine (elles reçoivent quand même le code). Pour dispenser d'autres adresses (un essai, un partenaire), ajoutez la propriété `EXEMPTES` (adresses séparées par des virgules). Ne mettez jamais ces adresses dans le code : il est public.
 
 ## 4. Publier la boîte
 1. Bouton bleu **Déployer**, **Nouveau déploiement**.
@@ -25,9 +26,10 @@ Durée : environ 10 minutes. À faire **avec la nouvelle adresse Google dédiée
 4. **Déployer**. Copiez l'**URL de l'application Web** (elle finit par `/exec`) et envoyez-la.
 
 ## 5. Vérifier
-Choisissez la fonction **tester** puis **Exécuter** : un faux dépôt est traité, vous recevez un courriel avec le fichier joint, dans lequel le marquage, le grade, le courriel, le téléphone et la clé du faux dépôt ont été retirés.
+Ouvrez l'URL `/exec` dans un navigateur : le message « Boîte de dépôt de la Bibliothèque IA Terre : en service » s'affiche. Ensuite, sur le site, faites un dépôt d'essai avec une adresse autorisée : vous recevez d'abord le code, puis le courriel de dépôt (le fichier joint contient le dépôt épuré et ses pièces jointes).
 
 ## Plus tard
 - Si vous modifiez le code : **Déployer**, **Gérer les déploiements**, crayon, version **Nouvelle version**, **Déployer**. L'URL ne change pas.
 - Activez la validation en deux étapes sur ce compte et ne réutilisez aucun mot de passe.
-- Limites techniques du script : 30 dépôts par heure, 200 Ko par dépôt. Au-delà, le formulaire demande de télécharger le fichier.
+- Limites techniques du script : 30 dépôts par heure et 6 par adresse et par jour, 200 Ko de texte par dépôt, 15 Mo de pièces jointes (10 fichiers), 3 codes par adresse et par heure, 5 essais par code, code valable 15 minutes. Google limite l'envoi à 100 destinataires par jour : le script garde une réserve de 30 courriels pour prévenir les validateurs et refuse les nouveaux codes en dessous. Au-delà d'une limite, le formulaire propose de télécharger le fichier.
+- Le script n'est plus testable depuis Google (plus de fonction « tester ») : les essais se font depuis le site.

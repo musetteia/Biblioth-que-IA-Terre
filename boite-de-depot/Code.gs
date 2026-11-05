@@ -6,8 +6,18 @@
  * l'enregistre dans un dossier Drive PRIVÉ et prévient les validateurs par courriel,
  * fichier joint. Il ne publie rien : la publication se fait après validation humaine.
  *
- * Il ne lit aucun autre fichier du compte, ne répond à personne d'autre qu'à
- * l'émetteur du dépôt (simple accusé « reçu »), et n'expose aucune liste de dépôts.
+ * Qui peut déposer : uniquement une adresse d'un domaine de la communauté (intradef.gouv.fr,
+ * academie.def.gouv.fr, domaine exact, sans sous-domaine) dont la personne a prouvé qu'elle lit la
+ * messagerie : le script envoie un code à 6 chiffres à cette adresse, la personne le saisit sur le site, et
+ * seulement alors le dépôt est accepté. Les validateurs (propriété « VALIDATEURS ») et les adresses de la
+ * propriété « EXEMPTES » sont dispensés de la règle de domaine, pas du code.
+ *
+ * Trois demandes possibles, toutes en POST :
+ *   {action:'code',     adresse}                  -> envoie un code à l'adresse (si elle est autorisée)
+ *   {action:'verifier', adresse, code}            -> renvoie un jeton à usage unique (30 min)
+ *   {action:'deposer',  adresse, jeton, p, ...}   -> enregistre le dépôt (avec pièces jointes éventuelles)
+ *
+ * Il ne lit aucun autre fichier du compte et n'expose aucune liste de dépôts.
  */
 
 // ===== EPURER:DEBUT (ce bloc est recopié tel quel dans interface/epurer.js) =====
@@ -156,9 +166,22 @@ var Epurer = (function () {
 // ===== EPURER:FIN =====
 
 var LIBELLES = { marquage: 'marquage', nom: 'nom de personne (prénom et nom)', courriel: 'adresse électronique', telephone: 'numéro de téléphone', cle: 'clé ou mot de passe', ip: 'adresse IP' };
-var MAX_OCTETS = 200000;      // taille maximale d'un dépôt
+var MAX_OCTETS_SANS_PJ = 200000;            // taille maximale d'un dépôt sans pièce jointe
+var MAX_OCTETS_DEPOT = 22 * 1024 * 1024;     // 15 Mo de pièces jointes, encodées en base64, plus le texte
+var MAX_PJ_OCTETS = 15 * 1024 * 1024;
+var MAX_PJ_NOMBRE = 10;
+var EXT_PJ = { docx: 'PK', xlsx: 'PK', pptx: 'PK', pdf: '%PDF' };
 var MAX_PAR_HEURE = 30;       // dépôts acceptés par heure, tous émetteurs confondus
+var MAX_DEPOTS_PAR_ADRESSE_JOUR = 6;
+var MAX_CODES_PAR_ADRESSE_HEURE = 3;
+var MAX_CODES_PAR_HEURE = 40; // tous émetteurs confondus
+var MAX_VERIFS_PAR_HEURE = 300;
+var RESERVE_COURRIELS = 30;   // quota de courriels toujours gardé pour prévenir les validateurs
+var DUREE_CODE = 900;         // secondes
+var DUREE_JETON = 1800;
+var ESSAIS_MAX = 5;
 var FORMAT = 'bibliotheque-ia-terre/proposition';
+var DOMAINES_AUTORISES = ['intradef.gouv.fr', 'academie.def.gouv.fr'];
 
 /** À lancer UNE fois à la main (menu « Exécuter »), pour autoriser le script et préparer le dossier. */
 function installer() {
@@ -175,18 +198,6 @@ function installer() {
   Logger.log('Quota de courriels restant aujourd\'hui : ' + MailApp.getRemainingDailyQuota());
 }
 
-/** Test sans site : fabrique un faux dépôt contenant volontairement un marquage, un nom de personne, etc. */
-function tester() {
-  var faux = {
-    format: FORMAT, titre: 'Essai de la boîte', resume: 'Essai. NON PROTÉGÉ', type: 'prompt',
-    auteur: 'Jean Dupont', probleme: 'Joindre jean.dupont@exemple.fr ou 06 12 34 56 78.',
-    donne: 'x', recoit: 'y', contenu: 'clé : api_key = abcdefghijklmnop1234', ia_compatibles: ['claude'],
-    controles: ['aucune-donnee-reelle', 'exemples-fictifs', 'aucun-nom-adresse', 'aucun-appel-reseau']
-  };
-  var r = traiter_({ p: faux, contact: '' });
-  Logger.log(JSON.stringify(r));
-}
-
 function doGet() {
   return ContentService.createTextOutput('Boîte de dépôt de la Bibliothèque IA Terre : en service.');
 }
@@ -195,24 +206,127 @@ function doPost(e) {
   var rep;
   try {
     var brut = (e && e.postData && e.postData.contents) || '';
-    if (brut.length > MAX_OCTETS) { rep = { ok: false, erreur: 'Dépôt trop volumineux.' }; }
-    else { rep = traiter_(JSON.parse(brut)); }
+    if (brut.length > MAX_OCTETS_DEPOT) { rep = { ok: false, erreur: 'Dépôt trop volumineux.' }; }
+    else {
+      var env = JSON.parse(brut);
+      if (env && env.action === 'code') { rep = demanderCode_(env, brut.length); }
+      else if (env && env.action === 'verifier') { rep = verifierCode_(env, brut.length); }
+      else { rep = traiter_(env); }
+    }
   } catch (err) {
     rep = { ok: false, erreur: 'Dépôt illisible.' };
   }
   return ContentService.createTextOutput(JSON.stringify(rep)).setMimeType(ContentService.MimeType.JSON);
 }
 
-function limiteAtteinte_() {
+// ---------- outils ----------
+function hex_(octets) {
+  return octets.map(function (b) { return ('0' + ((b < 0 ? b + 256 : b)).toString(16)).slice(-2); }).join('');
+}
+function sha256_(texte) { return hex_(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, texte, Utilities.Charset.UTF_8)); }
+function heure_() { return Utilities.formatDate(new Date(), 'Europe/Paris', 'yyyyMMddHH'); }
+function jour_() { return Utilities.formatDate(new Date(), 'Europe/Paris', 'yyyyMMdd'); }
+
+/** Compteur à durée limitée ; renvoie vrai si la limite est dépassée. À appeler sous verrou. */
+function compter_(cle, max, duree) {
+  var cache = CacheService.getScriptCache();
+  var n = parseInt(cache.get(cle) || '0', 10) + 1;
+  cache.put(cle, String(n), duree);
+  return n > max;
+}
+
+function liste_(propriete) {
+  return (PropertiesService.getScriptProperties().getProperty(propriete) || '')
+    .split(',').map(function (s) { return s.trim().toLowerCase(); }).filter(Boolean);
+}
+
+/** Forme stricte d'adresse, en minuscules ; renvoie '' si elle n'est pas acceptable. */
+function adresse_(brut) {
+  var a = String(brut == null ? '' : brut).trim().toLowerCase();
+  if (a.length > 120 || !/^[a-z0-9][a-z0-9._%+'-]{0,63}@[a-z0-9][a-z0-9.-]{1,80}\.[a-z]{2,}$/.test(a)) { return ''; }
+  if (a.indexOf('..') >= 0) { return ''; }
+  return a;
+}
+
+/** Domaine exact autorisé, ou adresse dispensée de la règle de domaine (validateurs, propriété EXEMPTES). */
+function autorisee_(a) {
+  var dom = a.slice(a.lastIndexOf('@') + 1);
+  if (DOMAINES_AUTORISES.indexOf(dom) >= 0) { return true; }
+  return liste_('VALIDATEURS').indexOf(a) >= 0 || liste_('EXEMPTES').indexOf(a) >= 0;
+}
+
+function codeAleatoire_() {
+  var o = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, Utilities.getUuid() + Utilities.getUuid() + String(Date.now()));
+  var n = 0;
+  for (var i = 0; i < 4; i++) { n = n * 256 + (o[i] < 0 ? o[i] + 256 : o[i]); }
+  return ('000000' + (n % 1000000)).slice(-6);
+}
+
+// ---------- étape 1 : envoi du code ----------
+function demanderCode_(env, taille) {
+  if (taille > 2000) { return { ok: false, erreur: 'Demande illisible.' }; }
+  var a = adresse_(env.adresse);
+  if (!a) { return { ok: false, erreur: 'Adresse électronique invalide.' }; }
+  if (!autorisee_(a)) {
+    return { ok: false, erreur: 'Cette adresse n\'est pas autorisée. Les dépôts sont ouverts aux adresses @intradef.gouv.fr et @academie.def.gouv.fr.' };
+  }
   var verrou = LockService.getScriptLock();
   verrou.waitLock(10000);
   try {
-    var cache = CacheService.getScriptCache();
-    var cle = 'n' + Utilities.formatDate(new Date(), 'Europe/Paris', 'yyyyMMddHH');
-    var n = parseInt(cache.get(cle) || '0', 10) + 1;
-    cache.put(cle, String(n), 3700);
-    return n > MAX_PAR_HEURE;
+    var cle = sha256_(a);
+    if (compter_('ca' + cle + heure_(), MAX_CODES_PAR_ADRESSE_HEURE, 3700)) {
+      return { ok: false, erreur: 'Trop de codes demandés pour cette adresse. Réessayez dans une heure.' };
+    }
+    if (compter_('cg' + heure_(), MAX_CODES_PAR_HEURE, 3700) || MailApp.getRemainingDailyQuota() < RESERVE_COURRIELS) {
+      return { ok: false, erreur: 'Service momentanément saturé. Réessayez plus tard.' };
+    }
+    var code = codeAleatoire_();
+    var sel = Utilities.getUuid();
+    CacheService.getScriptCache().put('c' + cle, JSON.stringify({ h: sha256_(sel + a + code), s: sel, e: 0 }), DUREE_CODE);
+    MailApp.sendEmail({
+      to: a, name: 'Bibliothèque IA Terre',
+      subject: 'Votre code de vérification : ' + code,
+      body: 'Bonjour,\n\nVotre code de vérification pour déposer sur la Bibliothèque IA Terre : ' + code + '\n\n' +
+            'Il est valable 15 minutes. Saisissez-le sur la page de dépôt.\n' +
+            'Si vous n\'êtes pas à l\'origine de cette demande, ignorez ce message : rien ne sera déposé.\n'
+    });
+    return { ok: true };
   } finally { verrou.releaseLock(); }
+}
+
+// ---------- étape 2 : vérification du code ----------
+function verifierCode_(env, taille) {
+  if (taille > 2000) { return { ok: false, erreur: 'Demande illisible.' }; }
+  var a = adresse_(env.adresse);
+  var code = String(env.code == null ? '' : env.code).replace(/\s+/g, '');
+  if (!a || !autorisee_(a) || !/^\d{6}$/.test(code)) { return { ok: false, erreur: 'Code ou adresse invalide.' }; }
+  var verrou = LockService.getScriptLock();
+  verrou.waitLock(10000);
+  try {
+    if (compter_('vg' + heure_(), MAX_VERIFS_PAR_HEURE, 3700)) { return { ok: false, erreur: 'Service momentanément saturé. Réessayez plus tard.' }; }
+    var cache = CacheService.getScriptCache();
+    var cle = 'c' + sha256_(a);
+    var brut = cache.get(cle);
+    if (!brut) { return { ok: false, erreur: 'Code expiré ou inconnu. Demandez un nouveau code.' }; }
+    var entree = JSON.parse(brut);
+    if (entree.e >= ESSAIS_MAX) { cache.remove(cle); return { ok: false, erreur: 'Trop d\'essais. Demandez un nouveau code.' }; }
+    if (sha256_(entree.s + a + code) !== entree.h) {
+      entree.e++;
+      if (entree.e >= ESSAIS_MAX) { cache.remove(cle); } else { cache.put(cle, JSON.stringify(entree), DUREE_CODE); }
+      return { ok: false, erreur: 'Code incorrect.' };
+    }
+    cache.remove(cle);                                   // un code ne sert qu'une fois
+    var jeton = Utilities.getUuid() + Utilities.getUuid();
+    cache.put('j' + sha256_(jeton), a, DUREE_JETON);
+    return { ok: true, jeton: jeton };
+  } finally { verrou.releaseLock(); }
+}
+
+// ---------- étape 3 : le dépôt ----------
+function limiteAtteinte_() {
+  var verrou = LockService.getScriptLock();
+  verrou.waitLock(10000);
+  try { return compter_('n' + heure_(), MAX_PAR_HEURE, 3700); } finally { verrou.releaseLock(); }
 }
 
 function nomFichier_(titre) {
@@ -221,22 +335,79 @@ function nomFichier_(titre) {
   return 'proposition-' + base + '-' + Utilities.formatDate(new Date(), 'Europe/Paris', 'yyyyMMdd-HHmmss') + '.json';
 }
 
+/** Contrôle côté serveur des pièces jointes : nombre, taille, type annoncé, signature, empreinte. L'analyse approfondie est faite par le skill. */
+function controlerPj_(liste) {
+  if (liste == null || (Array.isArray(liste) && !liste.length)) { return { ok: true, pj: [] }; }
+  if (!Array.isArray(liste) || liste.length > MAX_PJ_NOMBRE) { return { ok: false, erreur: 'Trop de pièces jointes (maximum ' + MAX_PJ_NOMBRE + ').' }; }
+  var total = 0, sortie = [];
+  for (var i = 0; i < liste.length; i++) {
+    var x = liste[i];
+    if (!x || typeof x.nom !== 'string' || typeof x.contenu_b64 !== 'string' || typeof x.sha256 !== 'string') {
+      return { ok: false, erreur: 'Pièce jointe ' + (i + 1) + ' invalide.' };
+    }
+    var m = /\.([A-Za-z0-9]{2,5})$/.exec(x.nom);
+    var ext = m ? m[1].toLowerCase() : '';
+    if (!EXT_PJ.hasOwnProperty(ext)) { return { ok: false, erreur: 'Type de pièce jointe non accepté : ' + x.nom.slice(0, 60) + ' (acceptés : .docx .xlsx .pptx .pdf).' }; }
+    if (!/^[A-Za-z0-9+\/]*={0,2}$/.test(x.contenu_b64) || x.contenu_b64.length % 4 !== 0) { return { ok: false, erreur: 'Pièce jointe illisible : ' + x.nom.slice(0, 60) }; }
+    var octets = Utilities.base64Decode(x.contenu_b64);
+    total += octets.length;
+    if (total > MAX_PJ_OCTETS) { return { ok: false, erreur: 'Pièces jointes trop lourdes (maximum 15 Mo au total).' }; }
+    var debut = octets.slice(0, 8).map(function (b) { return String.fromCharCode(b < 0 ? b + 256 : b); }).join('');
+    if (debut.indexOf(EXT_PJ[ext]) !== 0 && !(ext === 'pdf' && debut.indexOf('%PDF') >= 0)) {
+      return { ok: false, erreur: 'Le contenu de « ' + x.nom.slice(0, 60) + ' » ne correspond pas à son type.' };
+    }
+    var h = hex_(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, octets));
+    if (h !== x.sha256.toLowerCase()) { return { ok: false, erreur: 'Pièce jointe abîmée pendant l\'envoi : ' + x.nom.slice(0, 60) + '. Recommencez.' }; }
+    sortie.push({ nom: x.nom, taille: octets.length, sha256: h, contenu_b64: x.contenu_b64 });
+  }
+  return { ok: true, pj: sortie, total: total };
+}
+
 function traiter_(enveloppe) {
-  var p = enveloppe && enveloppe.p;
   if (enveloppe && enveloppe.piege) { return { ok: true }; }            // champ-piège rempli : on fait semblant
+  var p = enveloppe && enveloppe.p;
   if (!p || p.format !== FORMAT || typeof p.titre !== 'string' || !p.titre.trim()) {
     return { ok: false, erreur: 'Ce n\'est pas une proposition de la bibliothèque.' };
   }
-  if (limiteAtteinte_()) { return { ok: false, erreur: 'Trop de dépôts en ce moment. Réessayez dans une heure ou envoyez le fichier par courriel.' }; }
+  // Adresse vérifiée : le jeton obtenu avec le code est obligatoire.
+  var adresse = adresse_(enveloppe.adresse);
+  var cache = CacheService.getScriptCache();
+  var cleJeton = 'j' + sha256_(String(enveloppe.jeton || ''));
+  if (!adresse || !enveloppe.jeton || cache.get(cleJeton) !== adresse) {
+    return { ok: false, erreur: 'Adresse non vérifiée ou vérification expirée. Recommencez la vérification par code.', verification: true };
+  }
+  var pjBrut = p.pieces_jointes;
+  delete p.pieces_jointes;                                              // le base64 ne doit jamais passer par l'épuration de texte
+  if (!pjBrut || !pjBrut.length) {
+    if (JSON.stringify(p).length > MAX_OCTETS_SANS_PJ) { return { ok: false, erreur: 'Dépôt trop volumineux.' }; }
+  } else if (JSON.stringify(p).length > MAX_OCTETS_SANS_PJ) { return { ok: false, erreur: 'Texte du dépôt trop volumineux.' }; }
+  var verrou = LockService.getScriptLock();
+  verrou.waitLock(10000);
+  try {
+    if (compter_('d' + sha256_(adresse) + jour_(), MAX_DEPOTS_PAR_ADRESSE_JOUR, 90000)) {
+      return { ok: false, erreur: 'Nombre maximal de dépôts atteint aujourd\'hui pour cette adresse.' };
+    }
+  } finally { verrou.releaseLock(); }
+  if (limiteAtteinte_()) { return { ok: false, erreur: 'Trop de dépôts en ce moment. Réessayez dans une heure.' }; }
+
+  var controle = controlerPj_(pjBrut);
+  if (!controle.ok) { return { ok: false, erreur: controle.erreur }; }
 
   var props = PropertiesService.getScriptProperties();
   var epure = Epurer.proposition(p);
+  // Les noms de fichiers passent aussi par l'épuration (un nom de personne dans un nom de fichier).
+  var pj = controle.pj.map(function (x) {
+    var r = Epurer.texte(x.nom);
+    for (var k in r.retraits) { epure.retraits[k] = (epure.retraits[k] || 0) + r.retraits[k]; }
+    return { nom: r.texte, taille: x.taille, sha256: x.sha256, contenu_b64: x.contenu_b64 };
+  });
   // Le fichier transmis aux validateurs porte un bloc « reception » (ce qui a été retiré, alertes) que le
   // skill de validation lit puis retire : il n'est jamais publié.
   var recu = Utilities.formatDate(new Date(), 'Europe/Paris', "yyyy-MM-dd'T'HH:mm:ssXXX");
   var fichier = {};
   Object.keys(epure.proposition).forEach(function (k) { fichier[k] = epure.proposition[k]; });
-  fichier.reception = { recu_le: recu, retraits: epure.retraits, alertes: epure.alertes, boite: 1 };
+  if (pj.length) { fichier.pieces_jointes = pj; }
+  fichier.reception = { recu_le: recu, retraits: epure.retraits, alertes: epure.alertes, boite: 2, adresse_verifiee: adresse };
   var json = JSON.stringify(fichier, null, 2);
   var nom = nomFichier_(p.titre);
 
@@ -255,7 +426,11 @@ function traiter_(enveloppe) {
     'Type : ' + q.type + ' · Pseudo : ' + (q.auteur || '(non renseigné)'),
     'IA indiquées : ' + (Array.isArray(q.ia_compatibles) ? q.ia_compatibles.join(', ') : ''),
     'Résumé : ' + (q.resume || ''),
-    contact ? 'Contact laissé par l\'auteur (à ne pas publier) : ' + contact : 'Aucun contact laissé.',
+    'Adresse vérifiée par code (à ne pas publier) : ' + adresse,
+    contact ? 'Autre contact laissé par l\'auteur (à ne pas publier) : ' + contact : '',
+    '',
+    pj.length ? 'Pièces jointes (' + pj.length + ', ' + (controle.total / 1048576).toFixed(1) + ' Mo) :\n' + pj.map(function (x) { return '- ' + x.nom + ' (' + Math.round(x.taille / 1024) + ' Ko)'; }).join('\n') +
+      '\n(Elles sont à l\'intérieur du fichier joint : le skill les contrôle — macros, objets actifs, mots de passe… — avant toute validation.)' : 'Aucune pièce jointe.',
     '',
     retraits.length ? 'Éléments retirés automatiquement (valeurs non conservées) :\n' + retraits.join('\n') : 'Aucun élément à retirer.',
     epure.alertes.length ? '\nÀ VÉRIFIER :\n- ' + epure.alertes.join('\n- ') : '',
@@ -269,15 +444,16 @@ function traiter_(enveloppe) {
     'Rien n\'est publié tant que le dépôt n\'a pas été validé et fusionné.'
   ].join('\n');
 
-  var dest = (props.getProperty('VALIDATEURS') || '').split(',').map(function (s) { return s.trim(); }).filter(Boolean);
+  var dest = liste_('VALIDATEURS');
   var envoye = false;
   if (dest.length && MailApp.getRemainingDailyQuota() > 0) {
     MailApp.sendEmail({
-      to: dest.join(','), subject: '[Bibliothèque IA] Dépôt : ' + q.titre + ' (' + q.type + ')',
+      to: dest.join(','), subject: '[Bibliothèque IA] Dépôt : ' + q.titre + ' (' + q.type + ')' + (pj.length ? ' + ' + pj.length + ' pièce(s) jointe(s)' : ''),
       body: corps, name: 'Bibliothèque IA Terre - dépôts',
       attachments: [Utilities.newBlob(json, 'application/json', nom)]
     });
     envoye = true;
   }
+  cache.remove(cleJeton);                                // le jeton ne sert qu'une fois
   return { ok: true, prevenu: envoye, retraits: epure.retraits };
 }

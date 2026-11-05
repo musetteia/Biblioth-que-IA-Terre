@@ -430,3 +430,23 @@ textarea.saisie { resize: vertical; line-height: 1.5; }
 .retour-fichier.attention { border-left-color: var(--ambre); background: color-mix(in srgb, var(--ambre) 12%, var(--surface)); }
 .retour-fichier.erreur { border-left-color: var(--rouge); background: color-mix(in srgb, var(--rouge) 10%, var(--surface)); }
 .retour-fichier .bouton.lien { padding: 0; min-height: 28px; }
+
+/* ---- pièces jointes et vérification de l'adresse ---- */
+.liste-pj { list-style: none; margin: 12px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.liste-pj[hidden] { display: none; }
+.liste-pj li { display: flex; align-items: center; gap: 12px; padding: 8px 12px; border: 1px solid var(--trait); border-radius: 10px; background: var(--surface); }
+.liste-pj .pj-nom { flex: 1; min-width: 0; overflow-wrap: anywhere; font-weight: 600; }
+.liste-pj .pj-taille { color: var(--discret); font-size: 14px; white-space: nowrap; }
+.liste-pj .bouton.lien { padding: 0 4px; min-height: 32px; }
+.liste-pj .pj-total { border-style: dashed; color: var(--discret); font-size: 14px; }
+.verif-formulaire { width: min(520px, 100%); display: flex; flex-direction: column; gap: 14px; text-align: left; }
+.verif-formulaire .champ-titre { font-size: 18px; }
+.verif-formulaire .saisie { font-size: 20px; min-height: 52px; }
+.saisie-code { letter-spacing: .35em; text-align: center; font-size: 28px !important; font-variant-numeric: tabular-nums; }
+.verif-code { display: flex; flex-direction: column; gap: 14px; align-items: stretch; }
+.verif-code[hidden] { display: none; }
+.verif-code .actions-ecran { margin-top: 0; }
+.verif-message { margin: 0; padding: 10px 14px; border-radius: 12px; border-left: 4px solid var(--rouge); background: color-mix(in srgb, var(--rouge) 10%, var(--surface)); font-size: 16px; text-align: left; }
+.verif-message.info { border-left-color: var(--vert); background: color-mix(in srgb, var(--vert) 10%, var(--surface)); }
+.verif-message[hidden] { display: none; }
+.ecran-verif .ecran-gros { font-size: clamp(22px, 3.4vw, 30px); }

@@ -38,11 +38,34 @@ def ecrire_resume(lignes):
             f.write(texte + "\n")
 
 
+def _pieces_controlees(d, lot, erreurs_pj):
+    """Pièces jointes d'un fichier validé : nouvelle analyse complète, indépendante de celle du validateur."""
+    if erreurs_pj:
+        raise importer.ErreurProposition("Pièces jointes : " + " ".join(erreurs_pj))
+    attendues = (d["validation"].get("pieces_jointes") or [])
+    if not lot:
+        if attendues:
+            raise importer.ErreurProposition("Pièces jointes annoncées par la validation mais absentes du fichier.")
+        return None
+    if lot["refus"]:
+        raise importer.ErreurProposition("Pièces jointes refusées :\n" + "\n".join("  - " + x for x in lot["refus"]))
+    if sorted(x.get("sha256") for x in attendues) != sorted(f["sha256_origine"] for f in lot["fichiers"]):
+        raise importer.ErreurProposition("Les pièces jointes ne correspondent pas à celles qu'a validées le validateur (empreintes différentes).")
+    for f in lot["fichiers"]:
+        if f["sha256"] != f["sha256_origine"]:
+            raise importer.ErreurProposition("« %s » : des métadonnées de personne n'ont pas été anonymisées." % f["nom"])
+        if f["nom"] != f["nom_origine"]:
+            raise importer.ErreurProposition("« %s » : nom de fichier non conforme." % f["nom_origine"])
+    return [(f["nom"], f["octets"]) for f in lot["fichiers"]]
+
+
 def integrer(fichier, vocab, existants):
     d = importer.lire_proposition(str(fichier), vocab)
     if not isinstance(d.get("validation"), dict):
         raise importer.ErreurProposition("Ce fichier n'a pas été validé (bloc « validation » absent) : "
                                          "il doit d'abord passer par le skill valider-depot.")
+    lot, erreurs_pj = valider_depot.analyser_pj(d)     # retire « pieces_jointes » de d : le base64 ne passe pas par l'épuration de texte
+    pieces = _pieces_controlees(d, lot, erreurs_pj)
     _, reste, _ = valider_depot.epurer_proposition(d)
     if sum(reste.values()):
         detail = ", ".join("%d × %s" % (n, valider_depot.LIBELLES[c]) for c, n in reste.items() if n)
@@ -52,7 +75,7 @@ def integrer(fichier, vocab, existants):
     try:
         dossier = tmp / ident
         dossier.mkdir()
-        importer.ecrire_projet(dossier, d, vocab, ident)
+        importer.ecrire_projet(dossier, d, vocab, ident, pieces)
         rapport = importer.verifier(dossier, ident, existants, vocab)
         if rapport.erreurs:
             raise importer.ErreurProposition("Vérification du projet :\n" + "\n".join("  - " + e for e in rapport.erreurs))

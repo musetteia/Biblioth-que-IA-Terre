@@ -13,10 +13,11 @@ import re
 import shutil
 import sys
 import zipfile
+from urllib.parse import quote
 
 from commun import (
     INTERFACE, PROJETS, RACINE, ErreurFiche, analyser_filiation, analyser_fonctionnement, analyser_installation,
-    charger_json, charger_vocabulaires, console_utf8, fichiers_projet, historique_git, liste_dossiers_projets,
+    charger_json, charger_vocabulaires, console_utf8, est_piece_jointe, fichiers_projet, historique_git, liste_dossiers_projets,
     lire_projet,
 )
 from rendu import echapper, inline, rendre
@@ -178,10 +179,32 @@ class Constructeur:
             '<span class="doux">Un seul fichier, qui contient tous les fichiers du projet.</span></p>' % echapper(pid)
         )
         fichiers = []
+        pieces = []
         for rel in fichiers_projet(dossier):
+            if est_piece_jointe(rel):
+                pieces.append(rel)
+                continue
             texte = (dossier / rel).read_text(encoding="utf-8")
             fichiers.append({"chemin": rel.as_posix(), "taille": len(texte.encode("utf-8")), "texte": texte})
         noms = {f["chemin"] for f in fichiers}
+
+        pieces_html = ""
+        if pieces:
+            cible_pj = SITE / "pieces-jointes" / pid
+            cible_pj.mkdir(parents=True, exist_ok=True)
+            lignes_pj = []
+            for rel in pieces:
+                octets = (dossier / rel).read_bytes()
+                (cible_pj / rel.name).write_bytes(octets)
+                taille = ("%.1f Mo" % (len(octets) / 1048576)) if len(octets) >= 1048576 else ("%d Ko" % max(1, round(len(octets) / 1024)))
+                lignes_pj.append('<li><a href="../pieces-jointes/%s/%s" download>%s</a> <span class="doux">(%s, %s)</span></li>'
+                                 % (echapper(pid), echapper(quote(rel.name)), echapper(rel.name), echapper(rel.suffix[1:].upper()), taille))
+            pieces_html = (
+                '<section class="encadre"><h2>Pièces jointes</h2>'
+                '<p class="doux">Documents liés à ce projet. Ils ont été contrôlés à la validation (aucune macro, aucun objet actif, aucun mot de passe) '
+                'et leurs métadonnées de personne ont été anonymisées. Ouvrez-les avec Word, Excel, PowerPoint ou un lecteur PDF, comme tout document reçu.</p>'
+                '<ul>%s</ul></section>' % "".join(lignes_pj)
+            )
 
         etapes = []
         if "fonctionnement.md" in noms:
@@ -301,6 +324,7 @@ class Constructeur:
   <div class="principal-projet">
     <section class="panneau actif" id="panneau-fiche" role="tabpanel" aria-labelledby="onglet-fiche">
       <div class="doc">%(readme)s</div>
+      %(pieces)s
       <section class="encadre">
         <h2>Contrôles avant publication</h2>
         <ul class="controles">%(controles)s</ul>
@@ -334,6 +358,7 @@ class Constructeur:
             "statut": echapper(self.libelle("statut", m["statut"])), "version": echapper(m["version"]),
             "titre": echapper(m["titre"]), "resume": echapper(m["resume"]), "boutons": boutons,
             "readme": rendre(p["corps"]), "controles": controles, "histo": histo, "aside": aside, "telecharger": telecharger,
+            "pieces": pieces_html,
         }
         self.page(SITE / "projets" / ("%s.html" % pid), "%s — %s" % (m["titre"], self.site["nom"]), contenu, "../", "catalogue",
                   donnees=donnees, scripts=("projet.js",), classe="page-projet")
@@ -478,7 +503,7 @@ class Constructeur:
     def construire_proposer(self):
         intro = (
             "Vous avez un prompt, un skill, un script ou un projet qui sert ? Partagez-le en remplissant ce formulaire. "
-            "Pas de compte, pas d'installation : glissez votre fichier ou collez votre texte, rien ne part avant que vous cliquiez sur « Envoyer ». "
+            "Pas de compte, pas d'installation : glissez votre fichier (et vos pièces jointes éventuelles) ou collez votre texte. Rien ne part avant que vous cliquiez sur « Envoyer » et confirmiez votre adresse professionnelle par un code reçu par courriel. "
             "Utilisez uniquement des exemples fictifs."
         )
         contenu = (
@@ -497,6 +522,8 @@ class Constructeur:
             "contact": self.site.get("contact_propositions", "Envoyez ce fichier à la personne qui gère la bibliothèque."),
             # Adresse de la boîte de dépôt (script Google). Vide : le formulaire propose seulement le téléchargement.
             "boite": self.site.get("boite_depot", ""),
+            # Domaines de messagerie autorisés à déposer (affichés au contributeur ; la boîte de dépôt applique la règle).
+            "domaines": ["@intradef.gouv.fr", "@academie.def.gouv.fr"],
         }
         self.page(SITE / "pages" / "proposer.html", "Proposer un projet — %s" % self.site["nom"], contenu, "../", "proposer",
                   donnees=donnees, scripts=("epurer.js", "proposer.js"), classe="page-doc")

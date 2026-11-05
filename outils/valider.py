@@ -12,10 +12,12 @@ import re
 import sys
 
 from commun import (
-    CHAMPS_FACULTATIFS, CHAMPS_OBLIGATOIRES, EXTENSIONS_AUTORISEES, PROJETS, SECTIONS_OBLIGATOIRES,
+    CHAMPS_FACULTATIFS, CHAMPS_OBLIGATOIRES, EXTENSIONS_AUTORISEES, PROJETS, RACINE, SECTIONS_OBLIGATOIRES,
     TAILLE_MAX_FICHIER, ErreurFiche, analyser_filiation, analyser_fonctionnement, analyser_installation,
-    charger_vocabulaires, console_utf8, fichiers_projet, liste_dossiers_projets, lire_projet,
+    charger_vocabulaires, console_utf8, est_piece_jointe, fichiers_projet, liste_dossiers_projets, lire_projet,
 )
+
+sys.path.insert(0, str(RACINE / "outils-validation" / "valider-depot" / "scripts"))   # même analyse que le skill et le robot
 
 LETTRES = "A-Za-zÀ-ÿ"
 MARQUAGES = re.compile(
@@ -52,6 +54,24 @@ class Rapport:
 
 def _numero(texte, position):
     return texte.count("\n", 0, position) + 1
+
+
+def _verifier_pieces_jointes(rapport, dossier, pieces):
+    """Pièces jointes : mêmes contrôles que le skill valider-depot (aucune macro, aucun objet actif, aucun mot de passe…)."""
+    import analyse_pj
+    for rel in pieces:
+        if len(rel.parts) != 2:
+            rapport.erreur("%s : les pièces jointes doivent être directement dans pieces-jointes/ (pas de sous-dossier)." % rel.as_posix())
+    lot = analyse_pj.analyser_lot([(r.name, (dossier / r).read_bytes()) for r in pieces])
+    for x in lot["refus"]:
+        rapport.erreur("pieces-jointes : " + x)
+    for f in lot["fichiers"]:
+        if f["nom"] != f["nom_origine"]:
+            rapport.erreur("pieces-jointes/%s : nom de fichier à simplifier (« %s »)." % (f["nom_origine"], f["nom"]))
+        if not f["refus"] and f["sha256"] != f["sha256_origine"]:
+            rapport.erreur("pieces-jointes/%s : des métadonnées de personne n'ont pas été anonymisées (repasser par le skill valider-depot)." % f["nom_origine"])
+    for x in lot["alertes"]:
+        rapport.avertir("pieces-jointes : " + x)
 
 
 def analyser_contenu(rapport, chemin_affiche, texte, est_python):
@@ -192,8 +212,12 @@ def valider_projet(projet, tous_ids, vocab):
     # Fichiers
     fichiers = fichiers_projet(dossier)
     noms = {f.as_posix() for f in fichiers}
+    pieces = []
     for rel in fichiers:
         p = dossier / rel
+        if est_piece_jointe(rel):
+            pieces.append(rel)
+            continue
         if rel.suffix.lower() not in EXTENSIONS_AUTORISEES:
             rapport.erreur("%s : type de fichier non autorisé (autorisés : %s)." % (rel.as_posix(), " ".join(sorted(EXTENSIONS_AUTORISEES))))
             continue
@@ -208,6 +232,9 @@ def valider_projet(projet, tous_ids, vocab):
         analyser_contenu(rapport, rel.as_posix(), texte, rel.suffix.lower() == ".py")
         if rel.name != "README.md" and ("À remplacer" in texte or "A remplacer" in texte):
             rapport.erreur("%s : du texte du modèle (« À remplacer ») est encore présent." % rel.as_posix())
+
+    if pieces:
+        _verifier_pieces_jointes(rapport, dossier, pieces)
 
     # Fichiers imposés selon le type
     t = meta.get("type")

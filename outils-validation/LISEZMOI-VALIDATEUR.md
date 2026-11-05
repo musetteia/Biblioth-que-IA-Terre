@@ -16,14 +16,15 @@ Sur Claude Code : copiez le dossier `valider-depot` dans `~/.claude/skills/`.
 3. Écrivez : **Valide ce dépôt avec le skill valider-depot.**
 4. Claude présente ce qui a été retiré et ce qu'il complète, vous demande votre pseudo de validateur, puis vous remet **un seul fichier** : `valide-….json`. La fiche de validation s'affiche dans la conversation (elle est aussi rangée dans le fichier).
 5. Relisez la fiche. Si quelque chose ne va pas, dites-le dans la conversation : il corrige et refait le fichier.
-6. Si le résumé indique qu'un skill comportait d'autres fichiers (scripts, références), le formulaire n'a transmis que `SKILL.md` : demandez le reste à l'auteur, à l'adresse de contact indiquée dans le courriel.
+6. Si le dépôt a des **pièces jointes** (Word, Excel, PowerPoint, PDF), elles sont à l'intérieur du fichier `.json` : n'ouvrez jamais un document de votre côté, laissez Claude les contrôler et les lire. Le skill refuse les documents à macros, objets incorporés, mots de passe, etc. (l'auteur doit alors les corriger), anonymise les noms d'auteur dans les métadonnées, et vous signale les noms, numéros ou consignes suspectes présents dans le texte. À la fin, Claude vous donne son avis sur l'intention du dépôt (« aucun signal », « signaux à vérifier » ou « refus conseillé ») : c'est une aide, la décision est la vôtre.
+7. Si le résumé indique qu'un skill comportait d'autres fichiers (scripts, références), le formulaire n'a transmis que `SKILL.md` : demandez le reste à l'auteur (son adresse de messagerie vérifiée figure dans le courriel).
 
 ## 3. Déposer le résultat (compte GitHub avec droit d'écriture)
-1. Sur GitHub, ouvrez le dossier `validations` du dépôt de la bibliothèque (https://github.com/musetteia/Biblioth-que-IA-Terre/tree/main/validations), puis **Add file**, **Upload files**.
-2. Glissez le fichier unique `valide-….json`.
+1. Sur GitHub, ouvrez **d'abord** le dossier `validations` du dépôt de la bibliothèque (https://github.com/musetteia/Biblioth-que-IA-Terre/tree/main/validations), puis **Add file**, **Upload files**. (Si vous le faites depuis la page d'accueil du dépôt, le fichier atterrit à la racine et le robot l'ignore.)
+2. Glissez le fichier unique `valide-….json`, **jamais un .zip** : les pièces jointes sont déjà à l'intérieur.
 3. En bas, choisissez **Create a new branch for this commit and start a pull request**, puis **Propose changes**, puis **Create pull request**.
 4. Le robot fabrique le projet et l'ajoute à la demande de fusion (suivi dans l'onglet **Actions** : coche verte = conforme, croix rouge = motif affiché).
-5. Rien n'est publié avant la fusion par un administrateur.
+5. Quand la coche verte du robot apparaît, cliquez sur **Merge pull request** puis **Confirm merge** : la fusion publie le site (quelques minutes). Si une croix rouge apparaît, ouvrez le détail : le motif est écrit en clair ; corrigez avec l'auteur et recommencez.
 
 ## Ce que le skill ne fait jamais
 - Il ne modifie pas le contenu du contributeur (prompt, skill, code) : il le copie tel quel, aux éléments épurés près.
