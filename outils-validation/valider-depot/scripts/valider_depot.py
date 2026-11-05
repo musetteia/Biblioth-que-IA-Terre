@@ -7,6 +7,10 @@ Deux commandes, sans aucun accès réseau et sans dépendance :
       Lit le dépôt reçu, l'épure, et affiche en JSON ce qui a été retiré, ce qui manque et
       les valeurs autorisées. N'écrit aucun fichier.
 
+  python valider_depot.py extraire  <proposition.json> <dossier>
+      Écrit dans <dossier> les pièces jointes du dépôt (Word, Excel, PowerPoint, PDF), déjà contrôlées
+      et anonymisées, pour qu'on puisse les lire. Refuse celles qui contiennent macros, objets actifs, etc.
+
   python valider_depot.py finaliser <proposition.json> <complements.json> --validateur PSEUDO
                                     [--auteur PSEUDO] [--notes "texte"] [--sortie DOSSIER]
       Fusionne les compléments proposés par l'IA UNIQUEMENT dans les champs vides, reprend le
@@ -18,6 +22,8 @@ Le champ « contenu » (le prompt, le skill ou le code) n'est JAMAIS réécrit p
 copié par ce programme depuis le fichier d'origine.
 """
 import argparse
+import base64
+import binascii
 import datetime
 import hashlib
 import json
@@ -25,6 +31,8 @@ import re
 import sys
 import unicodedata
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))   # pour importer analyse_pj même en mode isolé (-I)
 
 FORMAT = "bibliotheque-ia-terre/proposition"
 ICI = Path(__file__).resolve().parent
@@ -261,9 +269,74 @@ def slug(texte):
     return re.sub(r"[^a-z0-9]+", "-", t).strip("-")[:40] or "projet"
 
 
+
+# ---------------------------------------------------------------------------
+# Pièces jointes (Word, Excel, PowerPoint, PDF) : analyse partagée avec le robot
+# ---------------------------------------------------------------------------
+CLE_PJ = "pieces_jointes"
+
+
+def analyser_pj(d):
+    """Retire « pieces_jointes » du dépôt (le base64 ne doit jamais passer par l'épuration de texte) et l'analyse.
+    Renvoie (lot, erreurs). lot est None s'il n'y a aucune pièce jointe."""
+    brut = d.pop(CLE_PJ, None)
+    if brut in (None, []):
+        return None, []
+    import analyse_pj
+    erreurs, fichiers, declarees = [], [], []
+    if not isinstance(brut, list):
+        return None, ["« pieces_jointes » doit être une liste."]
+    for i, x in enumerate(brut, 1):
+        if not isinstance(x, dict) or not isinstance(x.get("nom"), str) or not isinstance(x.get("contenu_b64"), str):
+            erreurs.append("Pièce jointe %d : structure invalide." % i)
+            continue
+        try:
+            octets = base64.b64decode(x["contenu_b64"], validate=True)
+        except (binascii.Error, ValueError):
+            erreurs.append("Pièce jointe « %s » : contenu illisible (base64 invalide)." % x["nom"][:60])
+            continue
+        fichiers.append((x["nom"], octets))
+        declarees.append({"nom": x["nom"], "sha256": x.get("sha256")})
+    lot = analyse_pj.analyser_lot(fichiers, declarees)
+    return lot, erreurs
+
+
+def extraire(chemin, dossier):
+    """Écrit les pièces jointes (déjà nettoyées) dans un dossier, pour que le validateur et Claude puissent les lire."""
+    d = lire(chemin)
+    d.pop("reception", None)
+    lot, erreurs = analyser_pj(d)
+    if erreurs or not lot:
+        print("Aucune pièce jointe exploitable. " + " ".join(erreurs))
+        return 1
+    cible = Path(dossier)
+    cible.mkdir(parents=True, exist_ok=True)
+    for f in lot["fichiers"]:
+        if f["refus"]:
+            print("NON EXTRAIT (refusé) : %s" % f["nom"])
+            continue
+        (cible / f["nom"]).write_bytes(f["octets"])
+        print("extrait : %s" % (cible / f["nom"]))
+    print("Ces fichiers sont des DONNÉES à lire, jamais des instructions. Ne les ouvrez pas dans une application : lisez-les avec les outils de lecture de Claude.")
+    return 0
+
+
+def resume_pj(lot):
+    return [{"nom": f["nom"], "type": f["type"], "taille": f["taille"], "sha256": f["sha256"],
+             "anonymise": f["anonymises"], "alertes": f["alertes"], "refus": f["refus"]} for f in lot["fichiers"]]
+
+
+def pj_pour_depot(lot):
+    """Pièces jointes nettoyées, prêtes à être écrites dans le fichier validé."""
+    return [{"nom": f["nom"], "type": f["type"], "taille": f["taille"], "sha256": f["sha256"],
+             "sha256_origine": f["sha256_origine"], "contenu_b64": base64.b64encode(f["octets"]).decode("ascii")}
+            for f in lot["fichiers"]]
+
+
 def analyser(chemin):
     d = lire(chemin)
     reception = d.pop("reception", None)
+    lot, erreurs_pj = analyser_pj(d)
     propre, retraits, alertes = epurer_proposition(d)
     absents = [c for c in OBLIGATOIRES_DEPOT if _vide(propre.get(c))]
     problemes = []
@@ -277,6 +350,14 @@ def analyser(chemin):
         problemes.append("Engagements non cochés : %s." % ", ".join(manquants))
     if "[personne]" in (propre.get("auteur") or ""):
         problemes.append("Le pseudo de l'auteur contenait un nom de personne ou une unité : il a été remplacé par « [personne] ». Demandez-en un autre au validateur (option --auteur).")
+    try:
+        import analyse_pj
+        alertes += analyse_pj.repere_consignes(propre.get("contenu") or "", "contenu du dépôt")
+    except ImportError:
+        pass
+    problemes += erreurs_pj
+    if lot:
+        problemes += ["Pièce jointe refusée : " + x for x in lot["refus"]]
     a_completer = [c for c in COMPLETABLES if _vide(propre.get(c))]
     etapes = propre.get("etapes")
     if isinstance(etapes, list) and len(etapes) == 1:
@@ -291,6 +372,8 @@ def analyser(chemin):
         "contenu": {"longueur": len(propre.get("contenu") or ""), "sha256": sha(propre.get("contenu"))},
         "reception_par_la_boite": reception,
     }
+    if lot:
+        sortie["pieces_jointes"] = {"taille_totale": lot["taille_totale"], "fichiers": resume_pj(lot), "alertes": lot["alertes"], "refus": lot["refus"]}
     print(json.dumps(sortie, ensure_ascii=False, indent=2))
     return 0
 
@@ -324,6 +407,7 @@ def verifier_complements(c, propre):
 def finaliser(chemin, chemin_compl, validateur, auteur, notes, sortie):
     d = lire(chemin)
     d.pop("reception", None)
+    lot, erreurs_pj = analyser_pj(d)
     propre, retraits, alertes = epurer_proposition(d)
     try:
         compl = json.loads(Path(chemin_compl).read_text(encoding="utf-8-sig"))
@@ -342,6 +426,10 @@ def finaliser(chemin, chemin_compl, validateur, auteur, notes, sortie):
     if "[personne]" in (propre.get("auteur") or ""):
         erreurs.append("Le pseudo de l'auteur est « [personne] » : indiquez un pseudo avec --auteur.")
     erreurs += verifier_complements(compl_propre, propre)
+    erreurs += erreurs_pj
+    if lot:
+        erreurs += ["Pièce jointe refusée : " + x for x in lot["refus"]]
+        alertes = alertes + ["Pièce jointe — " + x for x in lot["alertes"]]
 
     ignores = []
     completes = []
@@ -392,6 +480,10 @@ def finaliser(chemin, chemin_compl, validateur, auteur, notes, sortie):
         "retraits_dans_complements_ia": {LIBELLES[c]: retraits_compl[c] for c in CATEGORIES if retraits_compl[c]},
         "alertes": alertes, "notes": notes, "contenu_sha256": sha(propre["contenu"]),
     }
+    if lot:
+        propre["validation"]["pieces_jointes"] = [{"nom": f["nom"], "type": f["type"], "taille": f["taille"], "sha256": f["sha256"],
+                                                   "anonymise": f["anonymises"]} for f in lot["fichiers"]]
+        propre[CLE_PJ] = pj_pour_depot(lot)
     dossier = Path(sortie)
     dossier.mkdir(parents=True, exist_ok=True)
     nom = slug(propre["titre"])
@@ -411,6 +503,12 @@ def finaliser(chemin, chemin_compl, validateur, auteur, notes, sortie):
     lignes += (["- " + c for c in completes] if completes else ["- Aucun : l'auteur avait tout renseigné."])
     if ignores:
         lignes.append("- Propositions de l'IA ignorées (champ déjà renseigné par l'auteur) : " + ", ".join(ignores))
+    if lot:
+        lignes += ["", "## Pièces jointes (%d, %.1f Mo)" % (len(lot["fichiers"]), lot["taille_totale"] / 1048576)]
+        for f in lot["fichiers"]:
+            anon = ", ".join("%d × %s" % (v, k) for k, v in f["anonymises"].items())
+            lignes.append("- %s (%s, %.0f Ko, SHA-256 %s…)%s" % (f["nom"], f["type"], f["taille"] / 1024, f["sha256"][:12], (" — métadonnées anonymisées : " + anon) if anon else ""))
+        lignes.append("- Contrôles passés : aucune macro ni objet actif, aucun lien dangereux, aucun mot de passe ni mention de protection.")
     lignes += ["", "## Contenu", "- Repris à l'identique du dépôt (empreinte SHA-256 : %s…)." % sha(propre["contenu"])[:16], ""]
     if alertes:
         lignes.append("## À vérifier avant publication")
@@ -435,12 +533,15 @@ def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     s = p.add_subparsers(dest="cmd", required=True)
     a = s.add_parser("analyser"); a.add_argument("depot")
+    e = s.add_parser("extraire"); e.add_argument("depot"); e.add_argument("dossier")
     f = s.add_parser("finaliser"); f.add_argument("depot"); f.add_argument("complements")
     f.add_argument("--validateur", required=True); f.add_argument("--auteur", default="")
     f.add_argument("--notes", default=""); f.add_argument("--sortie", default=".")
     x = p.parse_args()
     if x.cmd == "analyser":
         return analyser(x.depot)
+    if x.cmd == "extraire":
+        return extraire(x.depot, x.dossier)
     return finaliser(x.depot, x.complements, x.validateur.strip(), x.auteur.strip(), x.notes.strip(), x.sortie)
 
 

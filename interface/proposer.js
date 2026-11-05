@@ -88,11 +88,23 @@
   var choixFichier = el('input', { type: 'file', id: 'fichier-contenu', classe: 'sr-only', tabindex: '-1', accept: '.md,.txt,.py,.zip,.json,.yaml,.yml,.csv,text/plain,text/markdown' });
   var boutonFichier = el('button', { type: 'button', classe: 'bouton secondaire', id: 'choisir-fichier', texte: 'Choisir un fichier' });
   var depot = el('div', { classe: 'zone-depot', id: 'zone-depot' }, [
-    el('p', { classe: 'zone-depot-titre', texte: 'Glissez ici votre fichier' }),
+    el('p', { classe: 'zone-depot-titre', texte: 'Glissez ici votre fichier de prompt, de skill ou de script' }),
     el('p', { classe: 'zone-depot-aide', texte: 'Prompt ou instructions en .md ou .txt, script en .py, skill en .zip ou SKILL.md. Vous pouvez aussi copier-coller le texte dans le champ ci-dessous.' }),
     boutonFichier, choixFichier
   ]);
   var retourFichier = el('div', { classe: 'retour-fichier', id: 'retour-fichier', role: 'status', 'aria-live': 'polite', hidden: 'hidden' });
+
+  // Pièces jointes : documents Word, Excel, PowerPoint ou PDF liés au projet. Lus dans ce navigateur, contrôlés
+  // une première fois ici, puis par la boîte de dépôt, par le validateur (skill) et par le robot de la bibliothèque.
+  var choixPj = el('input', { type: 'file', id: 'fichier-pj', classe: 'sr-only', tabindex: '-1', multiple: 'multiple', accept: '.docx,.xlsx,.pptx,.pdf' });
+  var boutonPj = el('button', { type: 'button', classe: 'bouton secondaire', id: 'choisir-pj', texte: 'Choisir des fichiers' });
+  var depotPj = el('div', { classe: 'zone-depot', id: 'zone-depot-pj' }, [
+    el('p', { classe: 'zone-depot-titre', texte: 'Glissez ici vos pièces jointes' }),
+    el('p', { classe: 'zone-depot-aide', texte: 'Word (.docx), Excel (.xlsx), PowerPoint (.pptx) ou PDF. 10 fichiers et 15 Mo au maximum en tout. Les macros, objets incorporés, liens vers d\'autres fichiers et mots de passe sont refusés. Si un document ne contient que du texte, collez plutôt ce texte dans le champ du contenu.' }),
+    boutonPj, choixPj
+  ]);
+  var retourPj = el('div', { classe: 'retour-fichier', id: 'retour-pj', role: 'status', 'aria-live': 'polite', hidden: 'hidden' });
+  var listePj = el('ul', { classe: 'liste-pj', id: 'liste-pj', hidden: 'hidden' });
 
   var erreursZone = el('div', { id: 'erreurs', classe: 'erreurs-form', role: 'alert', hidden: 'hidden' });
   var resultat = el('div', { id: 'resultat', classe: 'resultat-form', hidden: 'hidden' });
@@ -109,7 +121,9 @@
       el('div', { classe: 'champ' }, [el('span', { classe: 'champ-titre', id: 'ia-titre' }, [el('span', { texte: 'Testé avec' }), el('span', { classe: 'requis', texte: ' (obligatoire)' })]), el('p', { classe: 'champ-aide', texte: 'Cochez les IA avec lesquelles vous l\'avez testé. « Toutes les IA » si le projet est générique.' }), iaBoites])
     ]),
     section('2. Le contenu (obligatoire)', 'C\'est le cœur du projet : ce que les camarades vont copier.', [
-      el('div', { classe: 'champ' }, [el('label', { 'for': 'contenu', classe: 'champ-titre' }, [contenuLabel, el('span', { classe: 'requis', texte: ' (obligatoire)' })]), contenuAide, depot, retourFichier, contenuZone])
+      el('div', { classe: 'champ' }, [el('label', { 'for': 'contenu', classe: 'champ-titre' }, [contenuLabel, el('span', { classe: 'requis', texte: ' (obligatoire)' })]), contenuAide, depot, retourFichier, contenuZone]),
+      el('div', { classe: 'champ' }, [el('span', { classe: 'champ-titre', id: 'pj-titre' }, [el('span', { texte: 'Pièces jointes' }), el('span', { classe: 'facultatif', texte: ' (facultatif)' })]),
+        el('p', { classe: 'champ-aide', texte: 'Un document lié à votre projet (modèle, fiche, tableau…). Ces fichiers ne sont pas gardés dans le brouillon : si vous rechargez la page, ajoutez-les de nouveau.' }), depotPj, retourPj, listePj])
     ]),
     section('3. Vos engagements (obligatoire)', 'Vous certifiez avoir vérifié ces quatre points. Ils s\'affichent sur la fiche.', [attestations]),
     section('4. Pour compléter la fiche (facultatif)', 'Vous pouvez tout laisser vide. Ce que vous renseignez ici sera repris tel quel ; le reste sera proposé par la personne qui relit.', [
@@ -326,7 +340,7 @@
   // ---- page plein écran : chargement, puis réponse claire -----------------------
   var ecran = el('div', { id: 'ecran-envoi', classe: 'ecran-envoi', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'ecran-titre', hidden: 'hidden' });
   document.body.appendChild(ecran);
-  var ETAPES_ENVOI = ['Proposition vérifiée', 'Envoi à l\'équipe de relecture', 'Réception confirmée'];
+  var ETAPES_ENVOI = ['Adresse et proposition vérifiées', 'Envoi à l\'équipe de relecture', 'Réception confirmée'];
 
   function montrerEcran(etat, contenu) {
     ecran.className = 'ecran-envoi ecran-' + etat;
@@ -363,7 +377,7 @@
       el('h1', { id: 'ecran-titre', texte: 'Envoi en cours…' }),
       el('div', { classe: 'barre-envoi', role: 'progressbar', 'aria-label': 'Envoi en cours' }, [el('span')]),
       etapesEnvoi(1),
-      el('p', { classe: 'ecran-texte', texte: 'Ne fermez pas cette page. Cela prend quelques secondes.' })
+      el('p', { classe: 'ecran-texte', texte: totalPj() ? 'Ne fermez pas cette page. Envoi de ' + mo(totalPj()) + ' de pièces jointes : cela peut prendre une minute.' : 'Ne fermez pas cette page. Cela prend quelques secondes.' })
     ]);
   }
 
@@ -404,37 +418,113 @@
 
   var DUREE_MIN_CHARGEMENT = 1500; // ms : la page de chargement reste lisible même si la réponse est immédiate
 
-  function envoyer(s, contact, json, nom) {
+  // Appel à la boîte de dépôt, avec délai maximal. Renvoie la réponse JSON.
+  function appeler(corps, delai) {
+    return new Promise(function (ok, ko) {
+      var fin = false;
+      var t = setTimeout(function () { if (!fin) { fin = true; ko(new Error('delai')); } }, delai);
+      fetch(D.boite, { method: 'POST', body: JSON.stringify(corps) })
+        .then(function (r) { return r.json(); })
+        .then(function (j) { if (!fin) { fin = true; clearTimeout(t); ok(j); } })
+        .catch(function (e) { if (!fin) { fin = true; clearTimeout(t); ko(e); } });
+    });
+  }
+
+  function mo(octets) { return octets >= 1048576 ? (octets / 1048576).toFixed(1).replace('.', ',') + ' Mo' : Math.max(1, Math.round(octets / 1024)) + ' Ko'; }
+
+  // ---- étape 1 : vérification de l'adresse de messagerie (code à 6 chiffres) ----------
+  function ecranVerification(s, contact, json, nom, avis) {
+    var domaines = (D.domaines || []).join(' ou ');
+    var champAdresse = el('input', { type: 'email', id: 'adresse-verif', classe: 'saisie', autocomplete: 'email', placeholder: 'prenom.nom@intradef.gouv.fr', 'aria-describedby': 'verif-aide' });
+    if (/^[^@\s]+@[^@\s]+$/.test(contact || '')) { champAdresse.value = contact; }
+    var champCode = el('input', { type: 'text', id: 'code-verif', classe: 'saisie saisie-code', inputmode: 'numeric', autocomplete: 'one-time-code', maxlength: '8', placeholder: '000000', 'aria-label': 'Code à 6 chiffres reçu par courriel' });
+    var message = el('p', { classe: 'verif-message', role: 'alert', hidden: 'hidden' });
+    var etapeCode = el('div', { classe: 'verif-code', hidden: 'hidden' });
+    var recevoir = el('button', { type: 'button', classe: 'bouton bouton-geant', texte: 'Recevoir mon code' });
+    var valider = el('button', { type: 'button', classe: 'bouton bouton-geant', texte: 'Valider et envoyer' });
+    var renvoyer = el('button', { type: 'button', classe: 'bouton lien', texte: 'Renvoyer un code' });
+    var annuler = el('button', { type: 'button', classe: 'bouton lien lien-geant', texte: 'Annuler : revenir à ma proposition' });
+    function dire(texte, genre) { message.textContent = texte; message.className = 'verif-message ' + (genre || 'erreur'); message.hidden = !texte; }
+
+    function demander() {
+      var a = champAdresse.value.trim();
+      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(a)) { dire('Saisissez une adresse de messagerie valide.'); champAdresse.focus(); return; }
+      recevoir.disabled = true; renvoyer.disabled = true; dire('Envoi du code…', 'info');
+      appeler({ action: 'code', adresse: a }, 30000).then(function (j) {
+        recevoir.disabled = false;
+        if (j && j.ok) {
+          champAdresse.readOnly = true; recevoir.hidden = true; etapeCode.hidden = false;
+          dire('Un code vient d\'être envoyé à ' + a + ' (regardez aussi les courriers indésirables). Il est valable 15 minutes.', 'info');
+          champCode.focus();
+          setTimeout(function () { renvoyer.disabled = false; }, 30000);
+        } else { renvoyer.disabled = false; dire((j && j.erreur) || 'Le code n\'a pas pu être envoyé.'); }
+      }).catch(function () { recevoir.disabled = false; renvoyer.disabled = false; dire('La demande n\'a pas pu être envoyée (réseau ou filtrage). Réessayez dans un moment.'); });
+    }
+    function confirmer() {
+      var code = champCode.value.replace(/\s+/g, '');
+      if (!/^\d{6}$/.test(code)) { dire('Le code comporte 6 chiffres.'); champCode.focus(); return; }
+      valider.disabled = true; dire('Vérification…', 'info');
+      appeler({ action: 'verifier', adresse: champAdresse.value.trim(), code: code }, 30000).then(function (j) {
+        if (j && j.ok && j.jeton) { envoyer(s, contact, json, nom, champAdresse.value.trim(), j.jeton); }
+        else { valider.disabled = false; dire((j && j.erreur) || 'Code refusé.'); champCode.select(); }
+      }).catch(function () { valider.disabled = false; dire('La vérification n\'a pas pu aboutir (réseau ou filtrage). Réessayez.'); });
+    }
+    recevoir.addEventListener('click', demander);
+    renvoyer.addEventListener('click', function () { champAdresse.readOnly = false; demander(); });
+    valider.addEventListener('click', confirmer);
+    champCode.addEventListener('keydown', function (ev) { if (ev.key === 'Enter') { ev.preventDefault(); confirmer(); } });
+    champAdresse.addEventListener('keydown', function (ev) { if (ev.key === 'Enter') { ev.preventDefault(); if (!champAdresse.readOnly) { demander(); } } });
+    annuler.addEventListener('click', fermerEcran);
+    renvoyer.disabled = true;
+    etapeCode.appendChild(el('label', { 'for': 'code-verif', classe: 'champ-titre', texte: 'Code reçu par courriel' }));
+    etapeCode.appendChild(champCode);
+    etapeCode.appendChild(el('div', { classe: 'actions-ecran' }, [valider]));
+    etapeCode.appendChild(renvoyer);
+    montrerEcran('verif', [
+      surtitre(),
+      el('h1', { id: 'ecran-titre', texte: 'Confirmez votre adresse' }),
+      el('p', { classe: 'ecran-gros', texte: 'Les dépôts sont réservés à la communauté.' }),
+      el('p', { classe: 'ecran-texte', id: 'verif-aide', texte: 'Saisissez votre adresse professionnelle (' + domaines + '). Nous vous envoyons un code à 6 chiffres : le dépôt n\'est envoyé qu\'une fois ce code saisi. Votre adresse n\'est jamais publiée.' }),
+      avis ? el('p', { classe: 'verif-message erreur', role: 'alert', texte: avis }) : null,
+      el('div', { classe: 'verif-formulaire' }, [
+        el('label', { 'for': 'adresse-verif', classe: 'champ-titre', texte: 'Votre adresse de messagerie' }), champAdresse,
+        recevoir, message, etapeCode
+      ]),
+      annuler
+    ]);
+    champAdresse.focus();
+  }
+
+  // ---- étape 2 : envoi du dépôt (avec l'adresse vérifiée et le jeton obtenu) ------------
+  function envoyer(s, contact, json, nom, adresse, jeton) {
     ecranChargement();
     var debut = Date.now();
-    var corps = JSON.stringify({ p: s, contact: contact, piege: valeur('site-web') });
+    var pj = piecesPourEnvoi();
     var termine = false;
     function apres(fn) { setTimeout(fn, Math.max(0, DUREE_MIN_CHARGEMENT - (Date.now() - debut))); }
     function echec(msg) {
       if (termine) { return; } termine = true;
-      apres(function () { ecranEchec(msg, function () { envoyer(s, contact, json, nom); }, function () { telecharger(json, nom); }); });
+      apres(function () { ecranEchec(msg, function () { envoyer(s, contact, json, nom, adresse, jeton); }, function () { telecharger(jsonComplet(s), nom); }); });
     }
-    var minuteurEnvoi = setTimeout(function () {
-      echec('La réponse met trop de temps à arriver. Réessayez, ou téléchargez le fichier pour l\'envoyer autrement. ' + D.contact);
-    }, 45000);
-    fetch(D.boite, { method: 'POST', body: corps })
-      .then(function (r) { return r.json(); })
-      .then(function (j) {
-        clearTimeout(minuteurEnvoi);
-        if (termine) { return; }
-        if (j && j.ok) { termine = true; apres(function () { ecranSucces(s.titre); }); }
-        else { echec((j && j.erreur ? j.erreur + ' ' : '') + 'Réessayez dans un moment, ou téléchargez le fichier. ' + D.contact); }
-      })
-      .catch(function () {
-        clearTimeout(minuteurEnvoi);
-        echec('La réception n\'a pas pu être confirmée (réseau ou filtrage). Réessayez, ou téléchargez le fichier pour l\'envoyer autrement. ' + D.contact);
-      });
+    var corps = { adresse: adresse, jeton: jeton, p: pj.length ? Object.assign({}, s, { pieces_jointes: pj }) : s, contact: contact, piege: valeur('site-web') };
+    var delai = 45000 + Math.ceil(totalPj() / 1048576) * 12000;   // plus de temps pour de gros fichiers
+    appeler(corps, delai).then(function (j) {
+      if (termine) { return; }
+      if (j && j.ok) { termine = true; apres(function () { ecranSucces(s.titre); }); }
+      else if (j && j.verification) { termine = true; apres(function () { ecranVerification(s, contact, json, nom, 'La vérification de votre adresse a expiré : recommencez-la (votre proposition est conservée).'); }); }
+      else { echec((j && j.erreur ? j.erreur + ' ' : '') + 'Réessayez dans un moment, ou téléchargez le fichier. ' + D.contact); }
+    }).catch(function (e) {
+      echec(e && e.message === 'delai'
+        ? 'La réponse met trop de temps à arriver. Réessayez, ou téléchargez le fichier pour l\'envoyer autrement. ' + D.contact
+        : 'La réception n\'a pas pu être confirmée (réseau ou filtrage). Réessayez, ou téléchargez le fichier pour l\'envoyer autrement. ' + D.contact);
+    });
   }
 
   function reinitialiser() {
     try { localStorage.removeItem(CLE_BROUILLON); } catch (e) { /* ignoré */ }
     formulaire.reset();
     contenuZone.value = '';
+    PJ.length = 0; majListePj(); retourPj.hidden = true;
     etapesZone.textContent = '';
     ajouterEtape(); ajouterEtape();
     majContenu();
@@ -442,7 +532,8 @@
   }
 
   function montrerResultat(s, retraits, alertes, contact) {
-    var json = JSON.stringify(s, null, 2);
+    var affichage = PJ.length ? Object.assign({}, s, { pieces_jointes: PJ.map(function (x) { return { nom: nomPj(x.nom), taille: x.taille, sha256: x.sha256, contenu_b64: '(contenu du fichier, envoyé tel quel)' }; }) }) : s;
+    var json = JSON.stringify(affichage, null, 2);
     var nom = nomFichier(s);
     resultat.textContent = '';
     resultat.appendChild(el('h2', { texte: 'Votre proposition est prête' }));
@@ -459,13 +550,13 @@
     var actions = el('div', { classe: 'actions-form' });
     if (D.boite) {
       var envoi = el('button', { type: 'button', classe: 'bouton', texte: 'Envoyer ma proposition' });
-      envoi.addEventListener('click', function () { envoyer(s, contact, json, nom); });
+      envoi.addEventListener('click', function () { ecranVerification(s, contact, json, nom); });
       actions.appendChild(envoi);
     }
     var tele = el('button', { type: 'button', classe: 'bouton secondaire', texte: 'Télécharger le fichier ' + nom });
-    tele.addEventListener('click', function () { telecharger(json, nom); });
+    tele.addEventListener('click', function () { telecharger(jsonComplet(s), nom); });
     var copie = el('button', { type: 'button', classe: 'bouton secondaire', texte: 'Copier le contenu' });
-    copie.addEventListener('click', function () { copier(json, copie); });
+    copie.addEventListener('click', function () { copier(PJ.length ? jsonComplet(s) : json, copie); });
     actions.appendChild(tele); actions.appendChild(copie);
     resultat.appendChild(actions);
     resultat.appendChild(el('p', { classe: 'champ-aide', texte: D.boite ? 'Si l\'envoi échoue : ' + D.contact : D.contact }));
@@ -611,8 +702,13 @@
     if (!f) { return; }
     var ext = extension(f.name);
     if (ext === 'zip') { lireZip(f); return; }
+    if (PJ_EXT.indexOf(ext) >= 0) {
+      ajouterPj([f]);
+      message(['« ' + f.name + ' » est un document : il a été ajouté aux pièces jointes (plus bas). Pour le contenu du projet, collez le texte ou glissez un fichier .md, .txt, .py ou SKILL.md.'], 'attention');
+      return;
+    }
     if (EXT_TEXTE.indexOf(ext) < 0 && !/^text\//.test(f.type || '')) {
-      message(['Les fichiers .' + (ext || '?') + ' ne peuvent pas être lus ici (Word, PDF, images…). Ouvrez le document et copiez-collez son texte dans le champ ci-dessous.'], 'erreur');
+      message(['Les fichiers .' + (ext || '?') + ' ne peuvent pas être lus ici. Pour un document Word, Excel, PowerPoint ou PDF, utilisez le cadre « Pièces jointes » plus bas ; sinon copiez-collez son texte dans le champ ci-dessous.'], 'erreur');
       return;
     }
     if (f.size > TAILLE_MAX * 4) { message(['« ' + f.name + ' » est trop lourd pour le formulaire.'], 'erreur'); return; }
@@ -650,6 +746,106 @@
   });
   boutonFichier.addEventListener('click', function () { choixFichier.click(); });
   choixFichier.addEventListener('change', function () { lireFichier(choixFichier.files[0]); choixFichier.value = ''; });
+
+
+  // ---- pièces jointes ----------------------------------------------------------------
+  var PJ_EXT = ['docx', 'xlsx', 'pptx', 'pdf'];
+  var PJ_ANCIENS = { doc: 'Word', xls: 'Excel', ppt: 'PowerPoint', dot: 'Word', xlt: 'Excel', pps: 'PowerPoint' };
+  var PJ_MACROS = ['docm', 'xlsm', 'pptm', 'dotm', 'xltm', 'potm', 'ppsm', 'xlam', 'ppam', 'sldm'];
+  var PJ_MAX_TOTAL = 15 * 1024 * 1024, PJ_MAX_NB = 10;
+  var PJ = [];   // { nom, taille, octets (ArrayBuffer), sha256 }
+
+  function totalPj() { return PJ.reduce(function (t, x) { return t + x.taille; }, 0); }
+  function nomPj(n) {
+    var m = /^(.*?)(\.[A-Za-z0-9]+)$/.exec(n);
+    return (m ? Epurer.texte(m[1]).texte + m[2] : Epurer.texte(n).texte).slice(0, 120);
+  }
+  function enBase64(tampon) {
+    var o = new Uint8Array(tampon), morceaux = [];
+    for (var i = 0; i < o.length; i += 0x8000) { morceaux.push(String.fromCharCode.apply(null, o.subarray(i, i + 0x8000))); }
+    return btoa(morceaux.join(''));
+  }
+  function piecesPourEnvoi() {
+    return PJ.map(function (x) { return { nom: nomPj(x.nom), taille: x.taille, sha256: x.sha256, contenu_b64: enBase64(x.octets) }; });
+  }
+  function jsonComplet(s) {
+    return JSON.stringify(PJ.length ? Object.assign({}, s, { pieces_jointes: piecesPourEnvoi() }) : s, null, 2);
+  }
+  function hexa(tampon) { return Array.prototype.map.call(new Uint8Array(tampon), function (b) { return ('0' + b.toString(16)).slice(-2); }).join(''); }
+
+  // Premier contrôle, dans le navigateur : rapide, pour éviter d'attendre un refus. Le vrai contrôle est fait à la réception et à la validation.
+  function controlePj(nom, tampon) {
+    var ext = extension(nom), o = new Uint8Array(tampon);
+    if (PJ_ANCIENS[ext]) { return 'ancien format ' + PJ_ANCIENS[ext] + ' : il ne peut pas être contrôlé. Ouvrez-le, puis « Enregistrer sous » au format ' + { Word: '.docx', Excel: '.xlsx', PowerPoint: '.pptx' }[PJ_ANCIENS[ext]] + '.'; }
+    if (PJ_MACROS.indexOf(ext) >= 0) { return 'format à macros : refusé. Enregistrez-le sans macros.'; }
+    if (PJ_EXT.indexOf(ext) < 0) { return 'type non accepté (.' + (ext || '?') + '). Acceptés : .docx, .xlsx, .pptx, .pdf.'; }
+    if (!o.length) { return 'fichier vide.'; }
+    var brut = new TextDecoder('latin1').decode(o);
+    if (ext === 'pdf') {
+      if (brut.slice(0, 1024).indexOf('%PDF-') < 0) { return 'ce n\'est pas un vrai PDF.'; }
+      if (/\/(JavaScript|JS|Launch|EmbeddedFiles?|RichMedia|XFA)\b/.test(brut)) { return 'ce PDF contient un élément actif (JavaScript, fichier incorporé…) : refusé.'; }
+      if (/\/Encrypt\b/.test(brut)) { return 'PDF protégé par mot de passe : il ne peut pas être contrôlé.'; }
+      return null;
+    }
+    if (o[0] === 0xD0 && o[1] === 0xCF) { return 'ancien format Office sous une extension récente : refusé.'; }
+    if (o[0] !== 0x50 || o[1] !== 0x4B) { return 'ce n\'est pas un vrai document ' + ext.toUpperCase() + '.'; }
+    if (/vbaProject|macrosheets\/|activeX\/|\/embeddings\/|customUI\//i.test(brut)) { return 'ce document contient des macros ou des objets incorporés : refusé.'; }
+    return null;
+  }
+
+  function messagePj(lignes, genre) {
+    retourPj.textContent = '';
+    retourPj.className = 'retour-fichier ' + (genre || 'ok');
+    lignes.forEach(function (l) { if (l) { retourPj.appendChild(el('p', { texte: l })); } });
+    retourPj.hidden = !lignes.length;
+  }
+  function majListePj() {
+    listePj.textContent = '';
+    PJ.forEach(function (x, i) {
+      var retirer = el('button', { type: 'button', classe: 'bouton lien', texte: 'Retirer', 'aria-label': 'Retirer ' + x.nom });
+      retirer.addEventListener('click', function () { PJ.splice(i, 1); majListePj(); messagePj(['« ' + x.nom + ' » a été retiré.'], 'ok'); });
+      listePj.appendChild(el('li', {}, [el('span', { classe: 'pj-nom', texte: x.nom }), el('span', { classe: 'pj-taille', texte: mo(x.taille) }), retirer]));
+    });
+    if (PJ.length) { listePj.appendChild(el('li', { classe: 'pj-total' }, [el('span', { texte: PJ.length + ' fichier' + (PJ.length > 1 ? 's' : '') + ' · ' + mo(totalPj()) + ' sur 15 Mo' })])); }
+    listePj.hidden = !PJ.length;
+  }
+  function ajouterPj(fichiers) {
+    var liste = Array.prototype.slice.call(fichiers), refus = [], ajoutes = [], suite = Promise.resolve();
+    liste.forEach(function (f) {
+      suite = suite.then(function () {
+        if (PJ.length >= PJ_MAX_NB) { refus.push('« ' + f.name + ' » : 10 fichiers au maximum.'); return; }
+        if (totalPj() + f.size > PJ_MAX_TOTAL) { refus.push('« ' + f.name + ' » : il dépasserait 15 Mo au total.'); return; }
+        return lireOctets(f).then(function (tampon) {
+          var motif = controlePj(f.name, tampon);
+          if (motif) { refus.push('« ' + f.name + ' » : ' + motif); return; }
+          if (!(window.crypto && window.crypto.subtle)) { refus.push('« ' + f.name + ' » : ce navigateur ne permet pas de contrôler l\'intégrité du fichier. Utilisez une version récente de Chrome, Edge ou Firefox.'); return; }
+          return crypto.subtle.digest('SHA-256', tampon).then(function (h) {
+            var nom = f.name, n = 2;
+            while (PJ.some(function (x) { return x.nom.toLowerCase() === nom.toLowerCase(); })) { nom = f.name.replace(/(\.[^.]+)$/, ' (' + n++ + ')$1'); }
+            PJ.push({ nom: nom, taille: tampon.byteLength, octets: tampon, sha256: hexa(h) });
+            ajoutes.push(nom);
+          });
+        });
+      }).catch(function () { refus.push('« ' + f.name + ' » n\'a pas pu être lu.'); });
+    });
+    suite.then(function () {
+      majListePj();
+      var lignes = [];
+      if (ajoutes.length) { lignes.push(ajoutes.length + ' pièce' + (ajoutes.length > 1 ? 's jointes ajoutées' : ' jointe ajoutée') + '. Elles seront contrôlées à nouveau avant toute publication.'); }
+      messagePj(lignes.concat(refus), refus.length ? (ajoutes.length ? 'attention' : 'erreur') : 'ok');
+    });
+  }
+  [depotPj].forEach(function (cible) {
+    cible.addEventListener('dragover', function (ev) { if (!aDesFichiers(ev)) { return; } ev.preventDefault(); ev.dataTransfer.dropEffect = 'copy'; cible.classList.add('survol'); });
+    cible.addEventListener('dragleave', function () { cible.classList.remove('survol'); });
+    cible.addEventListener('drop', function (ev) {
+      if (!aDesFichiers(ev)) { return; }
+      ev.preventDefault(); ev.stopPropagation(); cible.classList.remove('survol');
+      ajouterPj(ev.dataTransfer.files);
+    });
+  });
+  boutonPj.addEventListener('click', function () { choixPj.click(); });
+  choixPj.addEventListener('change', function () { ajouterPj(choixPj.files); choixPj.value = ''; });
 
   // ---- démarrage -------------------------------------------------------
   if (!restaurer()) { ajouterEtape(); ajouterEtape(); }

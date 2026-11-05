@@ -13,6 +13,7 @@ Ces règles s'appliquent à tout projet de la bibliothèque. Elles protègent le
 - Les adresses électroniques, numéros de téléphone, adresses IP, mots de passe, clés ou jetons.
 - Les scripts qui accèdent au réseau, lancent des commandes système ou exécutent du texte comme du code.
 - Les fichiers qui ne sont pas du texte simple (formats autorisés : md, txt, py, json, csv, yaml). Taille maximale par fichier : 200 Ko.
+- Exception : les **pièces jointes** d'un projet, rangées dans `pieces-jointes/`, peuvent être des documents Word (`.docx`), Excel (`.xlsx`), PowerPoint (`.pptx`) ou PDF, 10 au plus et 15 Mo en tout. Elles sont contrôlées à la réception, par le validateur puis par le robot : sont refusés les macros, objets incorporés ou ActiveX, liens vers d'autres fichiers, JavaScript ou lancement de programme dans un PDF, fichiers chiffrés, anciens formats (`.doc`, `.xls`, `.ppt`), mentions de protection, clés et mots de passe. Les métadonnées de personnes sont anonymisées ; les noms ou numéros présents dans le texte d'un document sont signalés au validateur, qui décide.
 
 ## Les quatre contrôles à attester
 

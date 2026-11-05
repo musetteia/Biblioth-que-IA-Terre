@@ -6,11 +6,13 @@ Tout le monde peut proposer un projet, sans compte et sans installer quoi que ce
 
 1. Ouvrez la page [Proposer un projet](proposer.html).
 2. Remplissez les champs obligatoires : titre, pseudo, résumé et IA testées.
-3. Ajoutez le contenu : glissez votre fichier dans le cadre prévu (prompt ou instructions en `.md` ou `.txt`, script en `.py`, skill en `.zip` ou `SKILL.md`), ou copiez-collez son texte. Pour un skill en `.zip`, seul `SKILL.md` est envoyé : si votre skill contient d'autres fichiers, dites-le dans le résumé et laissez une adresse de contact.
-4. Cochez les quatre engagements : aucune donnée réelle, exemples fictifs, aucun nom ni adresse, aucun appel réseau.
-5. Cliquez sur *Vérifier et préparer ma proposition*, puis sur *Envoyer ma proposition*.
+3. Ajoutez le contenu : glissez votre fichier dans le premier cadre (prompt ou instructions en `.md` ou `.txt`, script en `.py`, skill en `.zip` ou `SKILL.md`), ou copiez-collez son texte. Pour un skill en `.zip`, seul `SKILL.md` est envoyé : si votre skill contient d'autres fichiers, dites-le dans le résumé.
+4. Si votre projet a des documents liés (modèle, fiche, tableau), glissez-les dans le second cadre, « Pièces jointes » : Word (`.docx`), Excel (`.xlsx`), PowerPoint (`.pptx`) ou PDF, 10 fichiers et 15 Mo au maximum. Les anciens formats (`.doc`, `.xls`, `.ppt`), les fichiers à macros, protégés par mot de passe ou contenant des objets incorporés sont refusés. Si un document ne contient que du texte, préférez le coller dans le champ du contenu (ou en `.md`) : c'est plus léger.
+5. Cochez les quatre engagements : aucune donnée réelle, exemples fictifs, aucun nom ni adresse, aucun appel réseau.
+6. Cliquez sur *Vérifier et préparer ma proposition*, puis sur *Envoyer ma proposition*.
+7. Confirmez votre adresse : saisissez votre adresse professionnelle (`@intradef.gouv.fr` ou `@academie.def.gouv.fr`), un code à 6 chiffres vous est envoyé, saisissez-le. Le dépôt n'est envoyé qu'après cette confirmation. Votre adresse n'est jamais publiée.
 
-C'est tout : vous n'avez plus rien à faire. Les noms, adresses électroniques, numéros de téléphone, clés et mentions de protection sont retirés automatiquement avant l'envoi. Les parties facultatives (problème résolu, étapes, exemples) seront complétées par la personne qui relit. Votre saisie est gardée dans votre navigateur jusqu'à l'envoi : vous pouvez fermer la page et revenir.
+C'est tout : vous n'avez plus rien à faire. Les métadonnées de personnes de vos pièces jointes (auteur, dernier enregistrement) sont remplacées par « [personne] » ; le contenu de vos documents n'est jamais modifié. Les noms, adresses électroniques, numéros de téléphone, clés et mentions de protection sont retirés automatiquement avant l'envoi. Les parties facultatives (problème résolu, étapes, exemples) seront complétées par la personne qui relit. Votre saisie est gardée dans votre navigateur jusqu'à l'envoi : vous pouvez fermer la page et revenir.
 
 ## Ce qui se passe ensuite
 

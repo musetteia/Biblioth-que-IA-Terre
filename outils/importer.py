@@ -17,7 +17,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-from commun import PROJETS, RACINE, ErreurFiche, charger_vocabulaires, console_utf8, lire_projet
+from commun import DOSSIER_PJ, PROJETS, RACINE, ErreurFiche, charger_vocabulaires, console_utf8, lire_projet
 from rendu import slug
 import valider
 
@@ -220,7 +220,7 @@ def contenu_principal(d, ident):
     return texte
 
 
-def ecrire_projet(dossier, d, vocab, ident):
+def ecrire_projet(dossier, d, vocab, ident, pieces=None):
     t = d["type"]
     nom_principal = FICHIER_PRINCIPAL.get(t) or ident.replace("-", "_") + ".py"
     (dossier / nom_principal).write_text(contenu_principal(d, ident), encoding="utf-8", newline="\n")
@@ -235,6 +235,10 @@ def ecrire_projet(dossier, d, vocab, ident):
     if d.get("etapes"):
         (dossier / "fonctionnement.md").write_text(fonctionnement(d), encoding="utf-8", newline="\n")
     (dossier / "installation.md").write_text(installation(d, vocab, nom_principal, bool(ex_in), bool(ex_out)), encoding="utf-8", newline="\n")
+    if pieces:
+        (dossier / DOSSIER_PJ).mkdir()
+        for nom, octets in pieces:
+            (dossier / DOSSIER_PJ / nom).write_bytes(octets)
 
 
 # -- vérification avant ajout -------------------------------------------------
@@ -273,6 +277,10 @@ def main(argv):
         donnees = lire_proposition(args[0], vocab)
     except ErreurProposition as e:
         print("Proposition refusée :\n%s" % e)
+        return 1
+    if donnees.get("pieces_jointes"):
+        print("Proposition refusée :\nelle contient des pièces jointes. Elles ne s'importent que par le circuit de validation "
+              "(skill valider-depot, puis dossier validations/ de GitHub).")
         return 1
 
     existants = {p.name for p in PROJETS.iterdir() if p.is_dir()} if PROJETS.exists() else set()

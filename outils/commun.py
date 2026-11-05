@@ -18,6 +18,15 @@ INTERFACE = RACINE / "interface"
 EXTENSIONS_AUTORISEES = {".md", ".txt", ".py", ".json", ".csv", ".yaml", ".yml"}
 TAILLE_MAX_FICHIER = 200_000  # octets
 
+# Pièces jointes (documents Office et PDF) : uniquement dans projets/<id>/pieces-jointes/, jamais lues comme du texte.
+DOSSIER_PJ = "pieces-jointes"
+EXTENSIONS_PJ = {".docx", ".xlsx", ".pptx", ".pdf"}
+
+
+def est_piece_jointe(rel):
+    """Vrai pour un chemin relatif (Path) rangé dans le dossier des pièces jointes."""
+    return len(rel.parts) > 1 and rel.parts[0] == DOSSIER_PJ
+
 SECTIONS_OBLIGATOIRES = ["Le problème résolu", "Entrées et sorties", "Limites connues"]
 
 CHAMPS_OBLIGATOIRES = [
