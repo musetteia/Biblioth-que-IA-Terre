@@ -7,7 +7,7 @@
  * fichier joint. Il ne publie rien : la publication se fait après validation humaine.
  *
  * Qui peut déposer : uniquement une adresse d'un domaine de la communauté (intradef.gouv.fr,
- * academie.def.gouv.fr, domaine exact, sans sous-domaine) dont la personne a prouvé qu'elle lit la
+ * academs.fr, domaine exact, sans sous-domaine) dont la personne a prouvé qu'elle lit la
  * messagerie : le script envoie un code à 6 chiffres à cette adresse, la personne le saisit sur le site, et
  * seulement alors le dépôt est accepté. Les validateurs (propriété « VALIDATEURS ») et les adresses de la
  * propriété « EXEMPTES » sont dispensés de la règle de domaine, pas du code.
@@ -181,7 +181,7 @@ var DUREE_CODE = 900;         // secondes
 var DUREE_JETON = 1800;
 var ESSAIS_MAX = 5;
 var FORMAT = 'bibliotheque-ia-terre/proposition';
-var DOMAINES_AUTORISES = ['intradef.gouv.fr', 'academie.def.gouv.fr'];
+var DOMAINES_AUTORISES = ['intradef.gouv.fr', 'academs.fr'];
 
 /** À lancer UNE fois à la main (menu « Exécuter »), pour autoriser le script et préparer le dossier. */
 function installer() {
@@ -268,7 +268,7 @@ function demanderCode_(env, taille) {
   var a = adresse_(env.adresse);
   if (!a) { return { ok: false, erreur: 'Adresse électronique invalide.' }; }
   if (!autorisee_(a)) {
-    return { ok: false, erreur: 'Cette adresse n\'est pas autorisée. Les dépôts sont ouverts aux adresses @intradef.gouv.fr et @academie.def.gouv.fr.' };
+    return { ok: false, erreur: 'Cette adresse n\'est pas autorisée. Les dépôts sont ouverts aux adresses @intradef.gouv.fr et @academs.fr.' };
   }
   var verrou = LockService.getScriptLock();
   verrou.waitLock(10000);

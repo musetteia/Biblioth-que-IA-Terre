@@ -14,8 +14,8 @@ console.log('Adresses');
 let w = monde(PROPS());
 ok('domaine exact intradef accepté', w.post({ action: 'code', adresse: 'prenom.nom@intradef.gouv.fr' }).ok === true);
 ok('un code a été envoyé à l\'adresse', w.mails.length === 1 && w.mails[0].to === 'prenom.nom@intradef.gouv.fr' && /^\d{6}$/.test(codeDuMail(w.mails[0])), w.mails);
-ok('academie.def.gouv.fr accepté', w.post({ action: 'code', adresse: 'a@academie.def.gouv.fr' }).ok === true);
-for (const a of ['x@gmail.com', 'x@evil.intradef.gouv.fr', 'x@intradef.gouv.fr.evil.com', 'x@xintradef.gouv.fr', 'x@def.gouv.fr', 'a@intradef.gouv.fr,b@gmail.com', 'a@intradef.gouv.fr\nbcc:b@x.fr', 'x@INTRADEF.GOUV.FR.', '', 'pas une adresse'])
+ok('academs.fr accepté', w.post({ action: 'code', adresse: 'a@academs.fr' }).ok === true);
+for (const a of ['x@gmail.com', 'x@evil.intradef.gouv.fr', 'x@evil.academs.fr', 'x@academs.fr.evil.com', 'x@xacadems.fr', 'x@academie.def.gouv.fr', 'x@intradef.gouv.fr.evil.com', 'x@xintradef.gouv.fr', 'x@def.gouv.fr', 'a@intradef.gouv.fr,b@gmail.com', 'a@intradef.gouv.fr\nbcc:b@x.fr', 'x@INTRADEF.GOUV.FR.', '', 'pas une adresse'])
   { const n = w.mails.length; const r = w.post({ action: 'code', adresse: a }); ok('refusé : ' + JSON.stringify(a), r.ok === false && w.mails.length === n, r); }
 ok('majuscules acceptées (normalisées)', monde(PROPS()).post({ action: 'code', adresse: 'A.B@INTRADEF.GOUV.FR' }).ok === true);
 ok('validateur dispensé de la règle de domaine', monde(PROPS()).post({ action: 'code', adresse: 'val2@gmail.com' }).ok === true);
