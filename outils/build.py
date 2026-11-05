@@ -523,7 +523,7 @@ class Constructeur:
             # Adresse de la boîte de dépôt (script Google). Vide : le formulaire propose seulement le téléchargement.
             "boite": self.site.get("boite_depot", ""),
             # Domaines de messagerie autorisés à déposer (affichés au contributeur ; la boîte de dépôt applique la règle).
-            "domaines": ["@intradef.gouv.fr", "@academie.def.gouv.fr"],
+            "domaines": ["@intradef.gouv.fr", "@academs.fr"],
         }
         self.page(SITE / "pages" / "proposer.html", "Proposer un projet — %s" % self.site["nom"], contenu, "../", "proposer",
                   donnees=donnees, scripts=("epurer.js", "proposer.js"), classe="page-doc")

@@ -17,7 +17,7 @@ Durée : environ 10 minutes. À faire **avec la nouvelle adresse Google dédiée
 1. Roue crantée **Paramètres du projet** (à gauche), tout en bas : **Propriétés du script**, **Modifier les propriétés du script**.
 2. La propriété `VALIDATEURS` existe déjà. Remplacez sa valeur par l'adresse qui doit recevoir les dépôts. Plusieurs adresses : séparez-les par des virgules, sans autre signe.
 3. Plus tard, pour passer à l'adresse commune des validateurs : modifiez cette même valeur. Il n'y a rien d'autre à changer, ni dans le script ni sur le site.
-4. **Qui peut déposer.** Seules les adresses `@intradef.gouv.fr` et `@academie.def.gouv.fr` (domaine exact, sans sous-domaine) peuvent recevoir un code et déposer. Les adresses de `VALIDATEURS` sont dispensées de cette règle de domaine (elles reçoivent quand même le code). Pour dispenser d'autres adresses (un essai, un partenaire), ajoutez la propriété `EXEMPTES` (adresses séparées par des virgules). Ne mettez jamais ces adresses dans le code : il est public.
+4. **Qui peut déposer.** Seules les adresses `@intradef.gouv.fr` et `@academs.fr` (domaine exact, sans sous-domaine) peuvent recevoir un code et déposer. Les adresses de `VALIDATEURS` sont dispensées de cette règle de domaine (elles reçoivent quand même le code). Pour dispenser d'autres adresses (un essai, un partenaire), ajoutez la propriété `EXEMPTES` (adresses séparées par des virgules). Ne mettez jamais ces adresses dans le code : il est public.
 
 ## 4. Publier la boîte
 1. Bouton bleu **Déployer**, **Nouveau déploiement**.
