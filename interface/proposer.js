@@ -145,7 +145,7 @@
       champ('exemple_entree', 'Exemple d\'entrée', '', zone(4, '', true)),
       champ('exemple_sortie', 'Résultat attendu', '', zone(4, '', true))
     ]),
-    section('7. Contact (facultatif)', 'Une adresse pour que la personne qui relit puisse vous poser une question. Elle n\'est jamais publiée ni écrite dans la fiche.', [
+    section('7. Votre adresse (nécessaire pour envoyer)', 'Votre adresse de messagerie, personnelle ou non : elle sert à confirmer votre dépôt par un code, et à la personne qui relit pour vous poser une question. Elle n\'est jamais publiée ni écrite dans la fiche.', [
       champ('contact', 'Votre adresse de messagerie', '', ligne('contact'))
     ]),
     piege,
@@ -435,8 +435,14 @@
   // ---- étape 1 : vérification de l'adresse de messagerie (code à 6 chiffres) ----------
   function ecranVerification(s, contact, json, nom, avis) {
     var domaines = (D.domaines || []).join(' ou ');
-    var champAdresse = el('input', { type: 'email', id: 'adresse-verif', classe: 'saisie', autocomplete: 'email', placeholder: 'prenom.nom@intradef.gouv.fr', 'aria-describedby': 'verif-aide' });
+    var champAdresse = el('input', { type: 'email', id: 'adresse-verif', classe: 'saisie', autocomplete: 'email', placeholder: 'votre adresse personnelle ou professionnelle', 'aria-describedby': 'verif-aide' });
     if (/^[^@\s]+@[^@\s]+$/.test(contact || '')) { champAdresse.value = contact; }
+    var champSec = el('input', { type: 'email', id: 'adresse-secu', classe: 'saisie', autocomplete: 'off', placeholder: 'prenom.nom@intradef.gouv.fr', 'aria-describedby': 'secu-aide' });
+    var blocSec = el('div', { classe: 'verif-secu', hidden: 'hidden' }, [
+      el('label', { 'for': 'adresse-secu', classe: 'champ-titre', texte: 'Votre adresse sécurisée (' + domaines + ')' }),
+      el('p', { classe: 'ecran-texte', id: 'secu-aide', texte: 'Première utilisation de cette adresse : le code part sur votre adresse sécurisée et valide les deux. Ensuite, le code sera envoyé directement à l\'adresse ci-dessus. Aucune des deux n\'est publiée.' }),
+      champSec
+    ]);
     var champCode = el('input', { type: 'text', id: 'code-verif', classe: 'saisie saisie-code', inputmode: 'numeric', autocomplete: 'one-time-code', maxlength: '8', placeholder: '000000', 'aria-label': 'Code à 6 chiffres reçu par courriel' });
     var message = el('p', { classe: 'verif-message', role: 'alert', hidden: 'hidden' });
     var etapeCode = el('div', { classe: 'verif-code', hidden: 'hidden' });
@@ -449,12 +455,21 @@
     function demander() {
       var a = champAdresse.value.trim();
       if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(a)) { dire('Saisissez une adresse de messagerie valide.'); champAdresse.focus(); return; }
+      var sec = blocSec.hidden ? '' : champSec.value.trim();
+      if (!blocSec.hidden && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(sec)) { dire('Saisissez votre adresse sécurisée (' + domaines + ').'); champSec.focus(); return; }
       recevoir.disabled = true; renvoyer.disabled = true; dire('Envoi du code…', 'info');
-      appeler({ action: 'code', adresse: a }, 30000).then(function (j) {
+      var demande = { action: 'code', adresse: a };
+      if (sec) { demande.securisee = sec; }
+      appeler(demande, 30000).then(function (j) {
         recevoir.disabled = false;
+        if (j && j.besoin_securisee) {
+          renvoyer.disabled = false; blocSec.hidden = false; dire(j.erreur || 'Indiquez votre adresse sécurisée.', 'info'); champSec.focus(); return;
+        }
         if (j && j.ok) {
-          champAdresse.readOnly = true; recevoir.hidden = true; etapeCode.hidden = false;
-          dire('Un code vient d\'être envoyé à ' + a + ' (regardez aussi les courriers indésirables). Il est valable 15 minutes.', 'info');
+          champAdresse.readOnly = true; champSec.readOnly = true; recevoir.hidden = true; etapeCode.hidden = false;
+          dire(j.envoye_a === 'securisee'
+            ? 'Un code vient d\'être envoyé à votre adresse sécurisée (' + (j.masque || '') + '). Il valide aussi ' + a + ' (regardez aussi les courriers indésirables). Il est valable 15 minutes.'
+            : 'Un code vient d\'être envoyé à ' + a + ' (regardez aussi les courriers indésirables). Il est valable 15 minutes.', 'info');
           champCode.focus();
           setTimeout(function () { renvoyer.disabled = false; }, 30000);
         } else { renvoyer.disabled = false; dire((j && j.erreur) || 'Le code n\'a pas pu être envoyé.'); }
@@ -470,10 +485,11 @@
       }).catch(function () { valider.disabled = false; dire('La vérification n\'a pas pu aboutir (réseau ou filtrage). Réessayez.'); });
     }
     recevoir.addEventListener('click', demander);
-    renvoyer.addEventListener('click', function () { champAdresse.readOnly = false; demander(); });
+    renvoyer.addEventListener('click', function () { champAdresse.readOnly = false; champSec.readOnly = false; demander(); });
     valider.addEventListener('click', confirmer);
     champCode.addEventListener('keydown', function (ev) { if (ev.key === 'Enter') { ev.preventDefault(); confirmer(); } });
     champAdresse.addEventListener('keydown', function (ev) { if (ev.key === 'Enter') { ev.preventDefault(); if (!champAdresse.readOnly) { demander(); } } });
+    champSec.addEventListener('keydown', function (ev) { if (ev.key === 'Enter') { ev.preventDefault(); if (!champSec.readOnly) { demander(); } } });
     annuler.addEventListener('click', fermerEcran);
     renvoyer.disabled = true;
     etapeCode.appendChild(el('label', { 'for': 'code-verif', classe: 'champ-titre', texte: 'Code reçu par courriel' }));
@@ -484,10 +500,10 @@
       surtitre(),
       el('h1', { id: 'ecran-titre', texte: 'Confirmez votre adresse' }),
       el('p', { classe: 'ecran-gros', texte: 'Les dépôts sont réservés à la communauté.' }),
-      el('p', { classe: 'ecran-texte', id: 'verif-aide', texte: 'Saisissez votre adresse professionnelle (' + domaines + '). Nous vous envoyons un code à 6 chiffres : le dépôt n\'est envoyé qu\'une fois ce code saisi. Votre adresse n\'est jamais publiée.' }),
+      el('p', { classe: 'ecran-texte', id: 'verif-aide', texte: 'Saisissez votre adresse de messagerie. Si elle n\'est pas encore connue, nous vous demanderons une adresse sécurisée (' + domaines + ') pour la rattacher. Un code à 6 chiffres confirme l\'adresse et le dépôt : rien n\'est envoyé tant qu\'il n\'est pas saisi. Vos adresses ne sont jamais publiées.' }),
       avis ? el('p', { classe: 'verif-message erreur', role: 'alert', texte: avis }) : null,
       el('div', { classe: 'verif-formulaire' }, [
-        el('label', { 'for': 'adresse-verif', classe: 'champ-titre', texte: 'Votre adresse de messagerie' }), champAdresse,
+        el('label', { 'for': 'adresse-verif', classe: 'champ-titre', texte: 'Votre adresse de messagerie' }), champAdresse, blocSec,
         recevoir, message, etapeCode
       ]),
       annuler

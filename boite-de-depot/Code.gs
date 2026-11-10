@@ -6,14 +6,19 @@
  * l'enregistre dans un dossier Drive PRIVÉ et prévient les validateurs par courriel,
  * fichier joint. Il ne publie rien : la publication se fait après validation humaine.
  *
- * Qui peut déposer : uniquement une adresse d'un domaine de la communauté (intradef.gouv.fr,
- * academs.fr, domaine exact, sans sous-domaine) dont la personne a prouvé qu'elle lit la
- * messagerie : le script envoie un code à 6 chiffres à cette adresse, la personne le saisit sur le site, et
- * seulement alors le dépôt est accepté. Les validateurs (propriété « VALIDATEURS ») et les adresses de la
- * propriété « EXEMPTES » sont dispensés de la règle de domaine, pas du code.
+ * Qui peut déposer : la personne indique son adresse (personnelle ou non) dans le formulaire.
+ *  - Première fois : elle indique aussi une adresse d'un domaine sécurisé (intradef.gouv.fr,
+ *    academie.def.gouv.fr, domaine exact, sans sous-domaine). Le script envoie le code à 6 chiffres à cette
+ *    adresse sécurisée, la personne le saisit sur le site : l'adresse indiquée est alors « enrôlée »
+ *    (on ne garde que son empreinte et l'adresse sécurisée de rattachement, pour un an renouvelable).
+ *  - Dépôts suivants : le code est envoyé directement à l'adresse enrôlée.
+ *  - Une adresse déjà d'un domaine sécurisé reçoit le code elle-même. Les validateurs (propriété
+ *    « VALIDATEURS ») et les adresses de la propriété « EXEMPTES » sont dispensés de la règle de domaine,
+ *    pas du code.
+ * Seulement après la saisie du code le dépôt est accepté.
  *
  * Trois demandes possibles, toutes en POST :
- *   {action:'code',     adresse}                  -> envoie un code à l'adresse (si elle est autorisée)
+ *   {action:'code',     adresse, securisee?}      -> envoie un code (à l'adresse, ou à l'adresse sécurisée à la 1re fois)
  *   {action:'verifier', adresse, code}            -> renvoie un jeton à usage unique (30 min)
  *   {action:'deposer',  adresse, jeton, p, ...}   -> enregistre le dépôt (avec pièces jointes éventuelles)
  *
@@ -181,7 +186,8 @@ var DUREE_CODE = 900;         // secondes
 var DUREE_JETON = 1800;
 var ESSAIS_MAX = 5;
 var FORMAT = 'bibliotheque-ia-terre/proposition';
-var DOMAINES_AUTORISES = ['intradef.gouv.fr', 'academs.fr'];
+var DOMAINES_AUTORISES = ['intradef.gouv.fr', 'academie.def.gouv.fr'];
+var DUREE_ENROLEMENT_JOURS = 365;   // une adresse enrôlée le reste un an après son dernier dépôt vérifié
 
 /** À lancer UNE fois à la main (menu « Exécuter »), pour autoriser le script et préparer le dossier. */
 function installer() {
@@ -248,11 +254,45 @@ function adresse_(brut) {
   return a;
 }
 
-/** Domaine exact autorisé, ou adresse dispensée de la règle de domaine (validateurs, propriété EXEMPTES). */
+/** Domaine exact d'un domaine sécurisé. */
+function domaineSecurise_(a) { return DOMAINES_AUTORISES.indexOf(a.slice(a.lastIndexOf('@') + 1)) >= 0; }
+
+/** Domaine sécurisé, ou adresse dispensée de la règle de domaine (validateurs, propriété EXEMPTES). */
 function autorisee_(a) {
-  var dom = a.slice(a.lastIndexOf('@') + 1);
-  if (DOMAINES_AUTORISES.indexOf(dom) >= 0) { return true; }
+  if (domaineSecurise_(a)) { return true; }
   return liste_('VALIDATEURS').indexOf(a) >= 0 || liste_('EXEMPTES').indexOf(a) >= 0;
+}
+
+// ---------- adresses enrôlées (empreinte seulement) ----------
+function cleEnrol_(a) { return 'E' + sha256_(a).slice(0, 40); }
+
+/** Adresse sécurisée de rattachement si l'adresse est enrôlée et non expirée, sinon ''. */
+function enrolee_(a) {
+  var brut = PropertiesService.getScriptProperties().getProperty(cleEnrol_(a));
+  if (!brut) { return ''; }
+  try {
+    var e = JSON.parse(brut);
+    if (!e || !e.s || !e.d || (Date.now() - e.d) > DUREE_ENROLEMENT_JOURS * 86400000) { return ''; }
+    return String(e.s);
+  } catch (err) { return ''; }
+}
+function enroler_(a, securisee) {
+  PropertiesService.getScriptProperties().setProperty(cleEnrol_(a), JSON.stringify({ s: securisee, d: Date.now() }));
+}
+function masquer_(a) {
+  var i = a.lastIndexOf('@');
+  return a.slice(0, 1) + '***' + a.slice(i);
+}
+
+/** À lancer à la main pour retirer une adresse enrôlée : écrire l'adresse dans la propriété « REVOQUER », puis exécuter. */
+function revoquer() {
+  var props = PropertiesService.getScriptProperties();
+  var a = adresse_(props.getProperty('REVOQUER'));
+  if (!a) { Logger.log('Propriété REVOQUER absente ou invalide.'); return; }
+  var existait = !!props.getProperty(cleEnrol_(a));
+  props.deleteProperty(cleEnrol_(a));
+  props.deleteProperty('REVOQUER');
+  Logger.log(existait ? 'Adresse retirée des adresses enrôlées.' : 'Cette adresse n\'était pas enrôlée.');
 }
 
 function codeAleatoire_() {
@@ -267,14 +307,27 @@ function demanderCode_(env, taille) {
   if (taille > 2000) { return { ok: false, erreur: 'Demande illisible.' }; }
   var a = adresse_(env.adresse);
   if (!a) { return { ok: false, erreur: 'Adresse électronique invalide.' }; }
-  if (!autorisee_(a)) {
-    return { ok: false, erreur: 'Cette adresse n\'est pas autorisée. Les dépôts sont ouverts aux adresses @intradef.gouv.fr et @academs.fr.' };
+  var sec = env.securisee ? adresse_(env.securisee) : '';
+  if (env.securisee && !sec) { return { ok: false, besoin_securisee: true, erreur: 'Adresse sécurisée invalide.' }; }
+
+  // Où part le code ? (dest) et à quelle adresse sécurisée l'adresse est-elle rattachée ? (rattache)
+  var dest, rattache = '', enrolement = false;
+  if (autorisee_(a)) { dest = a; }                      // domaine sécurisé, validateur ou exemptée : le code lui est envoyé
+  else {
+    var deja = enrolee_(a);
+    if (deja) { dest = a; rattache = deja; }             // adresse déjà enrôlée : le code lui est envoyé
+    else if (!sec) {
+      return { ok: false, besoin_securisee: true, erreur: 'Première utilisation de cette adresse : indiquez aussi une adresse sécurisée (@intradef.gouv.fr ou @academie.def.gouv.fr).' };
+    } else if (!domaineSecurise_(sec)) {
+      return { ok: false, besoin_securisee: true, erreur: 'L\'adresse sécurisée doit se terminer par @intradef.gouv.fr ou @academie.def.gouv.fr.' };
+    } else { dest = sec; rattache = sec; enrolement = true; }
   }
+
   var verrou = LockService.getScriptLock();
   verrou.waitLock(10000);
   try {
-    var cle = sha256_(a);
-    if (compter_('ca' + cle + heure_(), MAX_CODES_PAR_ADRESSE_HEURE, 3700)) {
+    if (compter_('ca' + sha256_(dest) + heure_(), MAX_CODES_PAR_ADRESSE_HEURE, 3700) ||
+        (dest !== a && compter_('cp' + sha256_(a) + heure_(), MAX_CODES_PAR_ADRESSE_HEURE, 3700))) {
       return { ok: false, erreur: 'Trop de codes demandés pour cette adresse. Réessayez dans une heure.' };
     }
     if (compter_('cg' + heure_(), MAX_CODES_PAR_HEURE, 3700) || MailApp.getRemainingDailyQuota() < RESERVE_COURRIELS) {
@@ -282,15 +335,21 @@ function demanderCode_(env, taille) {
     }
     var code = codeAleatoire_();
     var sel = Utilities.getUuid();
-    CacheService.getScriptCache().put('c' + cle, JSON.stringify({ h: sha256_(sel + a + code), s: sel, e: 0 }), DUREE_CODE);
+    // Le code est lié à l'adresse indiquée dans le formulaire (a), même s'il part vers l'adresse sécurisée.
+    CacheService.getScriptCache().put('c' + sha256_(a), JSON.stringify({ h: sha256_(sel + a + code), s: sel, e: 0, r: rattache, n: enrolement ? 1 : 0 }), DUREE_CODE);
+    var debut = 'Bonjour,\n\n';
+    var objet = enrolement
+      ? 'Quelqu\'un (vous, sans doute) veut déposer sur la Bibliothèque IA Terre avec l\'adresse ' + a + ' et l\'a rattachée à votre adresse sécurisée.\n' +
+        'Votre code de vérification : ' + code + '\n\n' +
+        'Saisissez-le sur la page de dépôt : il valide à la fois l\'adresse ' + a + ' et le dépôt. Les prochains dépôts de cette adresse se vérifieront directement sur elle.\n'
+      : 'Votre code de vérification pour déposer sur la Bibliothèque IA Terre : ' + code + '\n\n' + 'Saisissez-le sur la page de dépôt.\n';
     MailApp.sendEmail({
-      to: a, name: 'Bibliothèque IA Terre',
+      to: dest, name: 'Bibliothèque IA Terre',
       subject: 'Votre code de vérification : ' + code,
-      body: 'Bonjour,\n\nVotre code de vérification pour déposer sur la Bibliothèque IA Terre : ' + code + '\n\n' +
-            'Il est valable 15 minutes. Saisissez-le sur la page de dépôt.\n' +
+      body: debut + objet + 'Il est valable 15 minutes.\n' +
             'Si vous n\'êtes pas à l\'origine de cette demande, ignorez ce message : rien ne sera déposé.\n'
     });
-    return { ok: true };
+    return { ok: true, envoye_a: dest === a ? 'adresse' : 'securisee', masque: masquer_(dest) };
   } finally { verrou.releaseLock(); }
 }
 
@@ -299,7 +358,7 @@ function verifierCode_(env, taille) {
   if (taille > 2000) { return { ok: false, erreur: 'Demande illisible.' }; }
   var a = adresse_(env.adresse);
   var code = String(env.code == null ? '' : env.code).replace(/\s+/g, '');
-  if (!a || !autorisee_(a) || !/^\d{6}$/.test(code)) { return { ok: false, erreur: 'Code ou adresse invalide.' }; }
+  if (!a || !/^\d{6}$/.test(code)) { return { ok: false, erreur: 'Code ou adresse invalide.' }; }
   var verrou = LockService.getScriptLock();
   verrou.waitLock(10000);
   try {
@@ -316,8 +375,9 @@ function verifierCode_(env, taille) {
       return { ok: false, erreur: 'Code incorrect.' };
     }
     cache.remove(cle);                                   // un code ne sert qu'une fois
+    if (entree.r) { enroler_(a, entree.r); }             // enrôlement (1re fois) ou renouvellement d'un an
     var jeton = Utilities.getUuid() + Utilities.getUuid();
-    cache.put('j' + sha256_(jeton), a, DUREE_JETON);
+    cache.put('j' + sha256_(jeton), JSON.stringify({ a: a, r: entree.r || '' }), DUREE_JETON);
     return { ok: true, jeton: jeton };
   } finally { verrou.releaseLock(); }
 }
@@ -373,7 +433,9 @@ function traiter_(enveloppe) {
   var adresse = adresse_(enveloppe.adresse);
   var cache = CacheService.getScriptCache();
   var cleJeton = 'j' + sha256_(String(enveloppe.jeton || ''));
-  if (!adresse || !enveloppe.jeton || cache.get(cleJeton) !== adresse) {
+  var jeton = null;
+  try { jeton = JSON.parse(cache.get(cleJeton) || 'null'); } catch (err) { jeton = null; }
+  if (!adresse || !enveloppe.jeton || !jeton || jeton.a !== adresse) {
     return { ok: false, erreur: 'Adresse non vérifiée ou vérification expirée. Recommencez la vérification par code.', verification: true };
   }
   var pjBrut = p.pieces_jointes;
@@ -407,7 +469,7 @@ function traiter_(enveloppe) {
   var fichier = {};
   Object.keys(epure.proposition).forEach(function (k) { fichier[k] = epure.proposition[k]; });
   if (pj.length) { fichier.pieces_jointes = pj; }
-  fichier.reception = { recu_le: recu, retraits: epure.retraits, alertes: epure.alertes, boite: 2, adresse_verifiee: adresse };
+  fichier.reception = { recu_le: recu, retraits: epure.retraits, alertes: epure.alertes, boite: 2, adresse_verifiee: adresse, adresse_securisee: jeton.r || '' };
   var json = JSON.stringify(fichier, null, 2);
   var nom = nomFichier_(p.titre);
 
@@ -427,6 +489,7 @@ function traiter_(enveloppe) {
     'IA indiquées : ' + (Array.isArray(q.ia_compatibles) ? q.ia_compatibles.join(', ') : ''),
     'Résumé : ' + (q.resume || ''),
     'Adresse vérifiée par code (à ne pas publier) : ' + adresse,
+    jeton.r ? 'Adresse sécurisée de rattachement (à ne pas publier) : ' + jeton.r : '',
     contact ? 'Autre contact laissé par l\'auteur (à ne pas publier) : ' + contact : '',
     '',
     pj.length ? 'Pièces jointes (' + pj.length + ', ' + (controle.total / 1048576).toFixed(1) + ' Mo) :\n' + pj.map(function (x) { return '- ' + x.nom + ' (' + Math.round(x.taille / 1024) + ' Ko)'; }).join('\n') +

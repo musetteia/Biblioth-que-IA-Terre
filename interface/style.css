@@ -443,6 +443,9 @@ textarea.saisie { resize: vertical; line-height: 1.5; }
 .verif-formulaire .champ-titre { font-size: 18px; }
 .verif-formulaire .saisie { font-size: 20px; min-height: 52px; }
 .saisie-code { letter-spacing: .35em; text-align: center; font-size: 28px !important; font-variant-numeric: tabular-nums; }
+.verif-secu { display: flex; flex-direction: column; gap: 10px; }
+.verif-secu[hidden] { display: none; }
+.verif-secu .ecran-texte { margin: 0; font-size: 16px; }
 .verif-code { display: flex; flex-direction: column; gap: 14px; align-items: stretch; }
 .verif-code[hidden] { display: none; }
 .verif-code .actions-ecran { margin-top: 0; }

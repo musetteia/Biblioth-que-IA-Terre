@@ -12,7 +12,8 @@ function monde(props) {
       put: (k, v, s) => { cache[k] = { v: String(v), exp: horloge.t + s * 1000 }; },
       remove: k => { delete cache[k]; } }) },
     LockService: { getScriptLock: () => ({ waitLock() {}, releaseLock() {} }) },
-    PropertiesService: { getScriptProperties: () => ({ getProperty: k => props[k] || null, setProperty: (k, v) => { props[k] = v; } }) },
+    PropertiesService: { getScriptProperties: () => ({ getProperty: k => props[k] || null, setProperty: (k, v) => { props[k] = v; }, deleteProperty: k => { delete props[k]; } }) },
+    Logger: { log() {} },
     MailApp: { sendEmail: m => mails.push(m), getRemainingDailyQuota: () => 100 - mails.length },
     DriveApp: { getFolderById: () => ({ createFile: (n, c) => fichiers.push({ n, c }) }) },
     ContentService: { createTextOutput: t => ({ t, setMimeType() { return this; }, getContent() { return this.t; } }), MimeType: { JSON: 'json' } },
@@ -29,7 +30,7 @@ function monde(props) {
   const ctx = require('vm').createContext(sandbox);
   require('vm').runInContext(src, ctx);
   const post = (obj) => JSON.parse(ctx.doPost({ postData: { contents: typeof obj === 'string' ? obj : JSON.stringify(obj) } }).getContent());
-  return { post, mails, fichiers, horloge, props, cache };
+  return { post, mails, fichiers, horloge, props, cache, revoquer: () => ctx.revoquer() };
 }
 
 module.exports = { monde };
