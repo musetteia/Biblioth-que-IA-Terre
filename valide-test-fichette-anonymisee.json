@@ -1,0 +1,81 @@
+{
+  "format": "bibliotheque-ia-terre/proposition",
+  "version": 1,
+  "titre": "test-fichette-anonymisee",
+  "resume": "fichette",
+  "type": "skill",
+  "usage": "synthese",
+  "niveau": "debutant",
+  "langue": "fr",
+  "ia_compatibles": [
+    "claude"
+  ],
+  "etiquettes": "fiche, synthèse, word, docx, powershell",
+  "auteur": "Clément",
+  "probleme": "Rédiger une fiche de synthèse d'une page dans un format imposé (en-tête, encart de 5 à 8 lignes, trois parties rédigées) prend du temps, surtout pour tenir sur une seule page. Cette skill guide l'IA pour rédiger le texte dans ce format, l'assembler dans un modèle Word et contrôler la pagination et la longueur de l'encart. Elle s'adresse à une personne qui produit régulièrement des fiches au même format.",
+  "donne": "Le sujet et l'angle, la date, l'auteur, le dossier des sources et le dossier de sortie.",
+  "recoit": "Un fichier Word d'une page (A4 paysage, deux colonnes) construit depuis le modèle, avec le résultat des contrôles de mise en page.",
+  "limites": "Les scripts d'assemblage et de contrôle, le modèle Word et l'exemple cités dans le texte ne figurent pas dans le contenu déposé : à confirmer par l'auteur.\nLes scripts exigent Windows PowerShell 5.1 et Word installé pour le contrôle de pagination.\nLe rendu visuel n'est pas vérifié, seulement la pagination et la longueur de l'encart.\nLe format (en-tête, trois parties, encart) est propre à un cadre précis et suppose un modèle Word fourni par l'utilisateur.\nLes chiffres viennent uniquement des sources désignées : ceux qui ne sont pas sourcés doivent être relus par l'utilisateur.",
+  "contenu": "---\nname: fichette\ndescription: Construit une fiche EDG-T d'une page (format \"fichette\") pour son utilisateur, à partir du canevas Modele-fichette et du style de la fiche LPM v3. À utiliser quand il demande de créer, rédiger, refaire ou mettre en forme une fiche, une fichette, une fiche de synthèse ou de préparation de séance EDG-T, ou de \"faire comme la fiche LPM\".\n---\n\n# Skill fichette\n\nProduit un `.docx` d'une page (A4 paysage, 2 colonnes, Arial 11) à partir du canevas `assets/modele-fichette.docx`. Le style de référence est `assets/exemple-fiche-LPM-v3.docx` (version retouchée par l'utilisateur, son texte source est dans `assets/exemple-fiche-LPM-v3.content.txt`). **Lis ces deux éléments avant de rédiger** : l'exemple montre le niveau de densité, de narratif et de précision attendu.\n\n## Déroulé\n\n1. **Fraîcheur du canevas.** Si `Modele-fichette.docx` existe dans `<dossier-du-modele>\\`, compare son hash (`Get-FileHash`) à `assets/modele-fichette.docx`. S'ils diffèrent, dis-le à l'utilisateur et propose de remplacer la copie de la skill (relis alors les commentaires Word, qui portent les consignes).\n2. **Cadrage.** Si ce n'est pas déjà clair, demande : sujet et angle, date, auteur (par défaut `GRADE NOM`), dossier des sources, dossier de sortie. Les données viennent **uniquement des dossiers désignés par l'utilisateur** : ne cherche pas ailleurs sauf demande explicite. Signale tout chiffre que tu ne peux pas sourcer.\n3. **Rédaction** dans un fichier de contenu (UTF-8) au format de l'exemple (`AUTEUR|`, `DATE|`, `OBJET|`, `ENCART|`, `H|` titre de partie, `P|` paragraphe avec `**gras**`). Fichier de travail dans le scratchpad, pas dans les dossiers de l'utilisateur.\n4. **Assemblage** : \n   ```\n   powershell -NoProfile -ExecutionPolicy Bypass -File \"<skill>\\scripts\\build_fiche.ps1\" -Content <contenu.txt> -Output <dossier>\\AAAAMMJJ_NP_Fiche-<Sujet>.docx\n   ```\n   Le script construit la fiche depuis le modèle (en retirant les commentaires du modèle) puis lance `scripts/check_fiche.ps1`. Il refuse d'écraser un fichier existant : pour une nouvelle version, utilise `_v2`, `_v3`.\n5. **Corriger** selon les lignes `ATTENTION` du contrôle (débordement de page, encart hors de 5 à 8 lignes, tiret long, résidu du modèle, trop de gras), puis relancer sous un nouveau nom ou après avoir supprimé le brouillon que tu as toi-même créé.\n6. **Passe Opus facultative** (style et enchaînements) : voir `references/passe-opus.md`. À proposer, pas à imposer.\n7. **Compte rendu** : chemin du fichier, résultat des contrôles, points de rédaction à valider (chiffres sensibles, reformulations de ton fait). Le rendu visuel n'est pas vérifié par les scripts (seulement pagination et longueur d'encart) : dis-le.\n\n## Règles du canevas (issues des commentaires du modèle)\n\n- **En-tête** : `EDG-T/Groupe 2`, grade et nom de l'auteur, date, mot `FICHE`, `OBJET :`. Ne pas toucher à la structure.\n- **Encart** (`ENCART`) : « si vous ne deviez retenir que ça ». Il doit faire **5 à 8 lignes** une fois mis en page et permettre de comprendre l'idée maîtresse et les éléments les plus saillants seul (chiffres acceptés). Écrit en dernier, une fois le corps stabilisé.\n- **Trois parties** (`H|`) : (1) contexte général ; (2) enjeux, éléments plus concrets ou actualité, solutions décrites légèrement (3 maximum en général) ; (3) conclusions, perspectives, ou solution à privilégier parmi celles de la partie 2. Sous-parties possibles, jamais systématiques.\n- **Chaque partie est un narratif** : une suite logique d'arguments reliés par des connecteurs, pas une énumération. Chaque paragraphe pose son idée principale d'emblée, la partie 3 prolonge explicitement la 1 et la 2.\n- **Gras** sur les éléments saillants uniquement : idées maîtresses et chiffres clés (quelques passages par paragraphe, ni zéro ni une dizaine).\n- Schémas possibles s'ils sont très simples (non gérés par le script : à insérer à la main si besoin).\n\n## Style de l'utilisateur\n\n- Français, direct, sans tirets longs (virgules ou points).\n- Précision factuelle avant l'effet de style : l'utilisateur corrige les formulations approximatives (par exemple « la Défense », périmètre exact d'un chiffre, intitulé d'un scénario). Ses retouches sur l'exemple font foi sur le fond.\n- Tout ce que dit la fiche vient des sources fournies ; une reformulation qui ajoute une interprétation doit être signalée.\n- Titre de partie sous la forme « Sujet : thèse » (ex. « Perspectives post-2027 : une trajectoire votée mais pas acquise »).\n\n## Pièges techniques (Windows PowerShell 5.1)\n\n- Les scripts `.ps1` sont **ASCII uniquement** : 5.1 lit les fichiers sans BOM en ANSI. Ne pas y mettre d'accents ni de tirets typographiques (utiliser `[char]0x2014`).\n- PowerShell ne distingue pas `$f` de `$F` : ne pas réutiliser un nom de variable avec une casse différente.\n- `$env:TEMP` peut être en nom court (8.3) : normaliser avec `(Get-Item $path).FullName` avant de découper des chemins.\n- Le contrôle de pagination exige Word installé (COM) ; il ouvre le fichier en lecture seule et quitte Word à la fin.",
+  "etapes": [
+    {
+      "titre": "Cadrer la fiche",
+      "qui": "vous",
+      "entree": "Sujet, angle, date, auteur, dossier des sources, dossier de sortie",
+      "sortie": "Cadrage précis transmis à l'IA"
+    },
+    {
+      "titre": "Rédiger le contenu",
+      "qui": "ia",
+      "entree": "Les sources désignées",
+      "sortie": "Un fichier de contenu avec en-tête, encart et trois parties rédigées"
+    },
+    {
+      "titre": "Assembler le document",
+      "qui": "ia",
+      "entree": "Le fichier de contenu et le modèle Word",
+      "sortie": "Un fichier Word d'une page"
+    },
+    {
+      "titre": "Contrôler et corriger",
+      "qui": "ia",
+      "entree": "Le fichier Word et les alertes du contrôle",
+      "sortie": "Un fichier corrigé sous un nouveau nom de version"
+    },
+    {
+      "titre": "Relire et valider",
+      "qui": "vous",
+      "entree": "Le fichier et le compte rendu de l'IA",
+      "sortie": "Fiche validée, chiffres et reformulations vérifiés"
+    }
+  ],
+  "exemple_entree": "Sujet : les enjeux de la maintenance des véhicules d'une unité fictive. Date : 01/01/2030. Auteur : Dupont. Sources : le dossier « sources-exemple ».",
+  "exemple_sortie": "Un fichier Word d'une page : en-tête, objet, encart de cinq à huit lignes, puis trois parties intitulées « Sujet : thèse » (contexte, enjeux, perspectives), avec les éléments saillants en gras, et un compte rendu listant les contrôles et les points à valider.",
+  "controles": [
+    "aucune-donnee-reelle",
+    "exemples-fictifs",
+    "aucun-nom-adresse",
+    "aucun-appel-reseau"
+  ],
+  "validation": {
+    "par": "Clément",
+    "date": "2026-11-10T13:40:06+01:00",
+    "avec_ia": true,
+    "champs_completes_par_ia": [
+      "etiquettes",
+      "probleme",
+      "donne",
+      "recoit",
+      "limites",
+      "etapes",
+      "exemple_entree",
+      "exemple_sortie"
+    ],
+    "propositions_ia_ignorees": [],
+    "retraits_automatiques": {},
+    "retraits_dans_complements_ia": {},
+    "alertes": [],
+    "notes": "Aucun signal d'intention detecte (ne vaut pas garantie). Scripts, modele Word et exemple cites dans le texte absents du contenu depose : a confirmer par l'auteur. Mention du cadre EDG-T/Groupe 2 conservee dans le contenu : a confirmer par l'auteur.",
+    "contenu_sha256": "343947bac676c2bf57f53118395357f34dee14069f4d295f438d8c92d7ddd68f"
+  }
+}
