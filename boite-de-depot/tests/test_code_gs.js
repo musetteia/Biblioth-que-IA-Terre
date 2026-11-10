@@ -14,12 +14,45 @@ console.log('Adresses');
 let w = monde(PROPS());
 ok('domaine exact intradef accepté', w.post({ action: 'code', adresse: 'prenom.nom@intradef.gouv.fr' }).ok === true);
 ok('un code a été envoyé à l\'adresse', w.mails.length === 1 && w.mails[0].to === 'prenom.nom@intradef.gouv.fr' && /^\d{6}$/.test(codeDuMail(w.mails[0])), w.mails);
-ok('academs.fr accepté', w.post({ action: 'code', adresse: 'a@academs.fr' }).ok === true);
-for (const a of ['x@gmail.com', 'x@evil.intradef.gouv.fr', 'x@evil.academs.fr', 'x@academs.fr.evil.com', 'x@xacadems.fr', 'x@academie.def.gouv.fr', 'x@intradef.gouv.fr.evil.com', 'x@xintradef.gouv.fr', 'x@def.gouv.fr', 'a@intradef.gouv.fr,b@gmail.com', 'a@intradef.gouv.fr\nbcc:b@x.fr', 'x@INTRADEF.GOUV.FR.', '', 'pas une adresse'])
+ok('academie.def.gouv.fr accepté', w.post({ action: 'code', adresse: 'a@academie.def.gouv.fr' }).ok === true);
+for (const a of ['x@gmail.com', 'x@evil.intradef.gouv.fr', 'x@evil.academie.def.gouv.fr', 'x@academs.fr', 'x@academie.def.gouv.fr.evil.com', 'x@xacademie.def.gouv.fr', 'x@intradef.gouv.fr.evil.com', 'x@xintradef.gouv.fr', 'x@def.gouv.fr', 'a@intradef.gouv.fr,b@gmail.com', 'a@intradef.gouv.fr\nbcc:b@x.fr', 'x@INTRADEF.GOUV.FR.', '', 'pas une adresse'])
   { const n = w.mails.length; const r = w.post({ action: 'code', adresse: a }); ok('refusé : ' + JSON.stringify(a), r.ok === false && w.mails.length === n, r); }
+ok('adresse perso sans adresse sécurisée : demande l\'adresse sécurisée, aucun mail', (() => { const x = monde(PROPS()); const r = x.post({ action: 'code', adresse: 'perso@gmail.com' }); return r.ok === false && r.besoin_securisee === true && x.mails.length === 0; })());
 ok('majuscules acceptées (normalisées)', monde(PROPS()).post({ action: 'code', adresse: 'A.B@INTRADEF.GOUV.FR' }).ok === true);
 ok('validateur dispensé de la règle de domaine', monde(PROPS()).post({ action: 'code', adresse: 'val2@gmail.com' }).ok === true);
 ok('adresse EXEMPTES dispensée', monde(PROPS()).post({ action: 'code', adresse: 'test@gmail.com' }).ok === true);
+
+console.log('Adresse personnelle enrôlée via une adresse sécurisée');
+const P = 'perso.test@gmail.com', S = 'prenom.nom@intradef.gouv.fr';
+w = monde(PROPS());
+for (const sec of ['x@gmail.com', 'x@academs.fr', 'x@evil.intradef.gouv.fr', 'x@intradef.gouv.fr.evil.com', 'pas une adresse']) {
+  const n = w.mails.length; const r = w.post({ action: 'code', adresse: P, securisee: sec }); ok('adresse sécurisée refusée : ' + sec, r.ok === false && r.besoin_securisee === true && w.mails.length === n, r);
+}
+let r1 = w.post({ action: 'code', adresse: P, securisee: S });
+ok('1re fois : le code part vers l\'adresse sécurisée', r1.ok === true && r1.envoye_a === 'securisee' && w.mails.length === 1 && w.mails[0].to === S, [r1, w.mails]);
+ok('le courriel nomme l\'adresse perso, la réponse la masque', w.mails[0].body.includes(P) && r1.masque === 'p***@intradef.gouv.fr' && JSON.stringify(r1).indexOf(S) < 0, r1);
+const cE = codeDuMail(w.mails[0]);
+ok('rien n\'est enrôlé avant la saisie du code', w.post({ action: 'code', adresse: P }).besoin_securisee === true && w.mails.length === 1);
+w.post({ action: 'code', adresse: P, securisee: S }); const cE2 = codeDuMail(w.mails[w.mails.length - 1]);
+ok('le code ne valide pas une autre adresse perso', w.post({ action: 'verifier', adresse: 'autre@gmail.com', code: cE2 }).ok === false);
+const vE = w.post({ action: 'verifier', adresse: P, code: cE2 });
+ok('bon code : jeton rendu pour l\'adresse perso', vE.ok === true && vE.jeton, vE);
+const n0 = w.mails.length;
+let rS = w.post({ action: 'code', adresse: P });
+ok('adresses suivantes : code envoyé directement à l\'adresse perso', rS.ok === true && rS.envoye_a === 'adresse' && w.mails.length === n0 + 1 && w.mails[n0].to === P, [rS, w.mails[n0]]);
+ok('empreinte seulement dans les propriétés (pas d\'adresse perso en clair)', !Object.keys(w.props).some(k => k.indexOf(P) >= 0) && !Object.values(w.props).some(v => String(v).indexOf(P) >= 0));
+let tD = (() => { const c = codeDuMail(w.mails[n0]); return w.post({ action: 'verifier', adresse: P, code: c }).jeton; })();
+let rD = w.post({ adresse: P, jeton: tD, p: depot() });
+ok('dépôt accepté avec l\'adresse perso', rD.ok === true, rD);
+let fD = JSON.parse(w.fichiers[0].c);
+ok('reception et mail validateurs : les deux adresses', fD.reception.adresse_verifiee === P && fD.reception.adresse_securisee === S && w.mails[w.mails.length - 1].body.includes(P) && w.mails[w.mails.length - 1].body.includes(S), fD.reception);
+ok('jeton de l\'adresse perso inutilisable pour une autre adresse', (() => { const x = monde(PROPS()); x.post({ action: 'code', adresse: P, securisee: S }); const cc = codeDuMail(x.mails[0]); const tt = x.post({ action: 'verifier', adresse: P, code: cc }).jeton; return x.post({ adresse: S, jeton: tt, p: depot() }).ok === false && x.post({ adresse: 'val1@gmail.com', jeton: tt, p: depot() }).ok === false; })());
+ok('enrôlement expiré après un an : adresse sécurisée redemandée', (() => { const x = monde(PROPS()); x.post({ action: 'code', adresse: P, securisee: S }); x.post({ action: 'verifier', adresse: P, code: codeDuMail(x.mails[0]) }); x.horloge.t += 366 * 86400000; return x.post({ action: 'code', adresse: P }).besoin_securisee === true; })());
+ok('l\'usage renouvelle l\'enrôlement', (() => { const x = monde(PROPS()); x.post({ action: 'code', adresse: P, securisee: S }); x.post({ action: 'verifier', adresse: P, code: codeDuMail(x.mails[0]) }); x.horloge.t += 300 * 86400000; x.post({ action: 'code', adresse: P }); x.post({ action: 'verifier', adresse: P, code: codeDuMail(x.mails[x.mails.length - 1]) }); x.horloge.t += 300 * 86400000; return x.post({ action: 'code', adresse: P }).ok === true; })());
+ok('révocation : l\'adresse doit se ré-enrôler', (() => { const x = monde(PROPS()); x.post({ action: 'code', adresse: P, securisee: S }); x.post({ action: 'verifier', adresse: P, code: codeDuMail(x.mails[0]) }); x.props.REVOQUER = P; x.revoquer(); return x.post({ action: 'code', adresse: P }).besoin_securisee === true && !x.props.REVOQUER; })());
+ok('adresse sécurisée ignorée si l\'adresse est déjà sécurisée', (() => { const x = monde(PROPS()); const r = x.post({ action: 'code', adresse: 'a@intradef.gouv.fr', securisee: 'b@intradef.gouv.fr' }); return r.ok === true && x.mails[0].to === 'a@intradef.gouv.fr'; })());
+ok('quotas : 4e code pour la même adresse perso refusé même avec d\'autres adresses sécurisées', (() => { const x = monde(PROPS()); for (let i = 0; i < 3; i++) x.post({ action: 'code', adresse: P, securisee: 's' + i + '@intradef.gouv.fr' }); return x.post({ action: 'code', adresse: P, securisee: 's9@intradef.gouv.fr' }).ok === false; })());
+ok('plafond par adresse sécurisée (pas de bombardement d\'une boîte)', (() => { const x = monde(PROPS()); for (let i = 0; i < 3; i++) x.post({ action: 'code', adresse: 'p' + i + '@gmail.com', securisee: S }); return x.post({ action: 'code', adresse: 'p9@gmail.com', securisee: S }).ok === false; })());
 
 console.log('Code et jeton');
 w = monde(PROPS());
