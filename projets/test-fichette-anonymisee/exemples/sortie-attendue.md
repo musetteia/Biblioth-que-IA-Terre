@@ -1,1 +1,0 @@
-Un fichier Word d'une page : en-tête, objet, encart de cinq à huit lignes, puis trois parties intitulées « Sujet : thèse » (contexte, enjeux, perspectives), avec les éléments saillants en gras, et un compte rendu listant les contrôles et les points à valider.
