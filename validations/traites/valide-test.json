@@ -1,0 +1,72 @@
+{
+  "format": "bibliotheque-ia-terre/proposition",
+  "version": 1,
+  "titre": "Test",
+  "resume": "Je fais un test",
+  "type": "prompt",
+  "usage": "redaction",
+  "niveau": "debutant",
+  "langue": "fr",
+  "ia_compatibles": [
+    "claude"
+  ],
+  "etiquettes": "test",
+  "auteur": "Clément 64",
+  "probleme": "Dépôt de test servant à vérifier le circuit de validation de la bibliothèque. Il ne traite aucun besoin réel. À confirmer par l'auteur.",
+  "donne": "Rien : le contenu est un simple mot de test.",
+  "recoit": "Aucun résultat utile : projet de test.",
+  "limites": "Dépôt de test, sans intérêt pour les utilisateurs.\nLe contenu se limite à un mot.\nUsage, niveau et langue sont indicatifs et à confirmer par l'auteur.",
+  "contenu": "test",
+  "etapes": [
+    {
+      "titre": "Coller le texte",
+      "qui": "vous",
+      "entree": "Le texte « test »",
+      "sortie": "Texte collé dans la conversation"
+    },
+    {
+      "titre": "Lire la réponse",
+      "qui": "ia",
+      "entree": "Le texte « test »",
+      "sortie": "Réponse de l'IA"
+    },
+    {
+      "titre": "Relire",
+      "qui": "vous",
+      "entree": "Réponse de l'IA",
+      "sortie": "Vérification que le circuit fonctionne"
+    }
+  ],
+  "exemple_entree": "test",
+  "exemple_sortie": "Réponse quelconque de l'IA, sans valeur.",
+  "controles": [
+    "aucune-donnee-reelle",
+    "exemples-fictifs",
+    "aucun-nom-adresse",
+    "aucun-appel-reseau"
+  ],
+  "validation": {
+    "par": "Adrian",
+    "date": "2026-11-10T13:16:32+01:00",
+    "avec_ia": true,
+    "champs_completes_par_ia": [
+      "usage",
+      "niveau",
+      "langue",
+      "etiquettes",
+      "probleme",
+      "donne",
+      "recoit",
+      "limites",
+      "etapes",
+      "exemple_entree",
+      "exemple_sortie"
+    ],
+    "propositions_ia_ignorees": [],
+    "retraits_automatiques": {},
+    "retraits_dans_complements_ia": {},
+    "alertes": [],
+    "notes": "Dépôt de test : ne pas fusionner. Le pseudo d'origine de l'auteur a été remplacé par le validateur.",
+    "contenu_sha256": "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08"
+  }
+}
