@@ -1,0 +1,72 @@
+{
+  "format": "bibliotheque-ia-terre/proposition",
+  "version": 1,
+  "titre": "Skill test",
+  "resume": "Skill test",
+  "type": "prompt",
+  "usage": "redaction",
+  "niveau": "debutant",
+  "langue": "fr",
+  "ia_compatibles": [
+    "claude"
+  ],
+  "etiquettes": "test, essai",
+  "auteur": "Adrian",
+  "probleme": "Dépôt d'essai destiné à vérifier le circuit de dépôt de la bibliothèque. Il ne décrit aucun cas d'usage réel : à confirmer par l'auteur.",
+  "donne": "Rien : le contenu se réduit au mot « test ».",
+  "recoit": "Rien d'exploitable : à confirmer par l'auteur.",
+  "limites": "Le contenu se limite à un seul mot et ne peut pas être utilisé comme prompt.\nAucun cas d'usage, aucune consigne et aucun exemple n'ont été fournis par l'auteur.\nCe dépôt n'a de valeur que comme essai du circuit de dépôt.",
+  "contenu": "test",
+  "etapes": [
+    {
+      "titre": "Ouvrir le prompt",
+      "qui": "vous",
+      "entree": "Le texte du prompt",
+      "sortie": "Le texte copié dans l'IA"
+    },
+    {
+      "titre": "Lancer le prompt",
+      "qui": "ia",
+      "entree": "Le texte « test »",
+      "sortie": "Une réponse sans objet précis"
+    },
+    {
+      "titre": "Relire la réponse",
+      "qui": "vous",
+      "entree": "La réponse de l'IA",
+      "sortie": "Un constat : le prompt est un essai"
+    }
+  ],
+  "exemple_entree": "test",
+  "exemple_sortie": "Réponse quelconque de l'IA : le prompt ne précise aucune tâche.",
+  "controles": [
+    "aucune-donnee-reelle",
+    "exemples-fictifs",
+    "aucun-nom-adresse",
+    "aucun-appel-reseau"
+  ],
+  "validation": {
+    "par": "Adrian",
+    "date": "2026-11-12T16:12:48+01:00",
+    "avec_ia": true,
+    "champs_completes_par_ia": [
+      "usage",
+      "niveau",
+      "langue",
+      "etiquettes",
+      "probleme",
+      "donne",
+      "recoit",
+      "limites",
+      "etapes",
+      "exemple_entree",
+      "exemple_sortie"
+    ],
+    "propositions_ia_ignorees": [],
+    "retraits_automatiques": {},
+    "retraits_dans_complements_ia": {},
+    "alertes": [],
+    "notes": "Dépôt d'essai (contenu : « test »). Les champs complétés sont génériques et à confirmer par l'auteur ; à ne publier que si le validateur le souhaite.",
+    "contenu_sha256": "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08"
+  }
+}
