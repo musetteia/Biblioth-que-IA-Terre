@@ -8,7 +8,7 @@ Deux commandes, sans aucun accès réseau et sans dépendance :
       les valeurs autorisées. N'écrit aucun fichier.
 
   python valider_depot.py extraire  <proposition.json> <dossier>
-      Écrit dans <dossier> les pièces jointes du dépôt (Word, Excel, PowerPoint, PDF), déjà contrôlées
+      Écrit dans <dossier> les pièces jointes du dépôt (Word, Excel, PowerPoint, PDF, pages HTML), déjà contrôlées
       et anonymisées, pour qu'on puisse les lire. Refuse celles qui contiennent macros, objets actifs, etc.
 
   python valider_depot.py finaliser <proposition.json> <complements.json> --validateur PSEUDO
@@ -42,7 +42,7 @@ VOCAB = json.loads((ICI.parent / "references" / "vocabulaires.json").read_text(e
 # Épuration : même logique que interface/epurer.js (voir boite-de-depot/Code.gs).
 # ---------------------------------------------------------------------------
 MARQUAGES = re.compile(r"(^|[^A-Za-zÀ-ÿ])(DIFFUSION\s+RESTREINTE|CONFIDENTIEL(?:\s+D[ÉE]FENSE)?|SECRET(?:\s+D[ÉE]FENSE)?|TR[ÈE]S\s+SECRET|NON\s+PROT[ÉE]G[ÉE]|RESTRICTED|NATO\s+(?:SECRET|CONFIDENTIAL|RESTRICTED))(?![A-Za-zÀ-ÿ])")
-COURRIEL = re.compile(r"[\w.+-]+@([\w-]+(?:\.[\w-]+)+)", re.ASCII)
+COURRIEL = re.compile(r"(?<![\w.+-])[\w.+-]+@([\w-]+(?:\.[\w-]+)+)", re.ASCII)
 DOMAINE_FICTIF = re.compile(r"(^|\.)(example\.(com|org|net)|invalid|test|example)$")
 TELEPHONE = re.compile(r"(^|[^\d.])((?:(?:\+33|0033)[ .-]?\(?0?\)?|0)[1-9](?:[ .-]?\d{2}){4})(?!\d)", re.ASCII)
 IP = re.compile(r"(^|[^\d])((?:\d{1,3}\.){3}\d{1,3})(?!\d)(?!\.\d)", re.ASCII)
@@ -271,7 +271,7 @@ def slug(texte):
 
 
 # ---------------------------------------------------------------------------
-# Pièces jointes (Word, Excel, PowerPoint, PDF) : analyse partagée avec le robot
+# Pièces jointes (Word, Excel, PowerPoint, PDF, pages HTML) : analyse partagée avec le robot
 # ---------------------------------------------------------------------------
 CLE_PJ = "pieces_jointes"
 

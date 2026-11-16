@@ -193,17 +193,36 @@ class Constructeur:
             cible_pj = SITE / "pieces-jointes" / pid
             cible_pj.mkdir(parents=True, exist_ok=True)
             lignes_pj = []
+            a_html = False
             for rel in pieces:
                 octets = (dossier / rel).read_bytes()
-                (cible_pj / rel.name).write_bytes(octets)
+                if rel.suffix.lower() in (".html", ".htm"):
+                    # Une page HTML n'est JAMAIS servie telle quelle par le site (elle s'exécuterait sur son domaine) :
+                    # elle est publiée uniquement dans une archive .zip, à télécharger puis à ouvrir hors ligne.
+                    a_html = True
+                    nom_publie = rel.name + ".zip"
+                    with zipfile.ZipFile(str(cible_pj / nom_publie), "w", zipfile.ZIP_DEFLATED) as z:
+                        info = zipfile.ZipInfo(rel.name, date_time=(2026, 1, 1, 0, 0, 0))
+                        info.compress_type = zipfile.ZIP_DEFLATED
+                        info.external_attr = 0o644 << 16
+                        z.writestr(info, octets)
+                    nature = "HTML, dans un .zip"
+                else:
+                    nom_publie = rel.name
+                    (cible_pj / rel.name).write_bytes(octets)
+                    nature = rel.suffix[1:].upper()
                 taille = ("%.1f Mo" % (len(octets) / 1048576)) if len(octets) >= 1048576 else ("%d Ko" % max(1, round(len(octets) / 1024)))
                 lignes_pj.append('<li><a href="../pieces-jointes/%s/%s" download>%s</a> <span class="doux">(%s, %s)</span></li>'
-                                 % (echapper(pid), echapper(quote(rel.name)), echapper(rel.name), echapper(rel.suffix[1:].upper()), taille))
+                                 % (echapper(pid), echapper(quote(nom_publie)), echapper(nom_publie), echapper(nature), taille))
             pieces_html = (
                 '<section class="encadre"><h2>Pièces jointes</h2>'
                 '<p class="doux">Documents liés à ce projet. Ils ont été contrôlés à la validation (aucune macro, aucun objet actif, aucun mot de passe) '
                 'et leurs métadonnées de personne ont été anonymisées. Ouvrez-les avec Word, Excel, PowerPoint ou un lecteur PDF, comme tout document reçu.</p>'
-                '<ul>%s</ul></section>' % "".join(lignes_pj)
+                + ('<p class="doux">Les pages HTML ne s\'ouvrent jamais depuis ce site : elles sont fournies dans une archive .zip. '
+                   'Elles ont été contrôlées (aucun appel réseau, aucune ressource distante), mais un fichier HTML reste un programme : '
+                   'décompressez-le, lisez les explications du projet, puis ouvrez-le dans votre navigateur, sans connexion, '
+                   'seulement si vous faites confiance à son origine.</p>' if a_html else '')
+                + '<ul>%s</ul></section>' % "".join(lignes_pj)
             )
 
         etapes = []

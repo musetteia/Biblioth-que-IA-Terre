@@ -96,11 +96,11 @@
 
   // Pièces jointes : documents Word, Excel, PowerPoint ou PDF liés au projet. Lus dans ce navigateur, contrôlés
   // une première fois ici, puis par la boîte de dépôt, par le validateur (skill) et par le robot de la bibliothèque.
-  var choixPj = el('input', { type: 'file', id: 'fichier-pj', classe: 'sr-only', tabindex: '-1', multiple: 'multiple', accept: '.docx,.xlsx,.pptx,.pdf' });
+  var choixPj = el('input', { type: 'file', id: 'fichier-pj', classe: 'sr-only', tabindex: '-1', multiple: 'multiple', accept: '.docx,.xlsx,.pptx,.pdf,.html,.htm' });
   var boutonPj = el('button', { type: 'button', classe: 'bouton secondaire', id: 'choisir-pj', texte: 'Choisir des fichiers' });
   var depotPj = el('div', { classe: 'zone-depot', id: 'zone-depot-pj' }, [
     el('p', { classe: 'zone-depot-titre', texte: 'Glissez ici vos pièces jointes' }),
-    el('p', { classe: 'zone-depot-aide', texte: 'Word (.docx), Excel (.xlsx), PowerPoint (.pptx) ou PDF. 10 fichiers et 15 Mo au maximum en tout. Les macros, objets incorporés, liens vers d\'autres fichiers et mots de passe sont refusés. Si un document ne contient que du texte, collez plutôt ce texte dans le champ du contenu.' }),
+    el('p', { classe: 'zone-depot-aide', texte: 'Word (.docx), Excel (.xlsx), PowerPoint (.pptx), PDF ou page HTML autonome (.html). 10 fichiers et 15 Mo au maximum en tout. Les macros, objets incorporés, liens vers d\'autres fichiers et mots de passe sont refusés. Une page HTML doit fonctionner hors ligne : tout appel réseau ou ressource distante est refusé, et la page n\'est publiée que dans une archive .zip. Si un document ne contient que du texte, collez plutôt ce texte dans le champ du contenu.' }),
     boutonPj, choixPj
   ]);
   var retourPj = el('div', { classe: 'retour-fichier', id: 'retour-pj', role: 'status', 'aria-live': 'polite', hidden: 'hidden' });
@@ -605,7 +605,7 @@
 
   // ---- dépôt d'un fichier (glisser-déposer ou bouton) ---------------------
   var EXT_TEXTE = ['md', 'markdown', 'txt', 'py', 'json', 'yaml', 'yml', 'csv'];
-  var TAILLE_MAX = 150000;   // caractères : la boîte de dépôt refuse les dépôts de plus de 200 Ko
+  var TAILLE_MAX = 500000;   // caractères de texte par fichier ou par champ ; la boîte de dépôt refuse au-delà (voir boite-de-depot/Code.gs : MAX_CONTENU)
   var ancienContenu = null;
 
   function extension(nom) { var m = /\.([^.\/]+)$/.exec(nom || ''); return m ? m[1].toLowerCase() : ''; }
@@ -720,7 +720,7 @@
     if (ext === 'zip') { lireZip(f); return; }
     if (PJ_EXT.indexOf(ext) >= 0) {
       ajouterPj([f]);
-      message(['« ' + f.name + ' » est un document : il a été ajouté aux pièces jointes (plus bas). Pour le contenu du projet, collez le texte ou glissez un fichier .md, .txt, .py ou SKILL.md.'], 'attention');
+      message(['« ' + f.name + ' » est ' + (/^html?$/.test(ext) ? 'une page HTML : elle a été ajoutée aux pièces jointes (plus bas), publiée seulement dans une archive .zip' : 'un document : il a été ajouté aux pièces jointes (plus bas)') + '. Pour le contenu du projet, collez le texte ou glissez un fichier .md, .txt, .py ou SKILL.md.'], 'attention');
       return;
     }
     if (EXT_TEXTE.indexOf(ext) < 0 && !/^text\//.test(f.type || '')) {
@@ -765,7 +765,7 @@
 
 
   // ---- pièces jointes ----------------------------------------------------------------
-  var PJ_EXT = ['docx', 'xlsx', 'pptx', 'pdf'];
+  var PJ_EXT = ['docx', 'xlsx', 'pptx', 'pdf', 'html', 'htm'];
   var PJ_ANCIENS = { doc: 'Word', xls: 'Excel', ppt: 'PowerPoint', dot: 'Word', xlt: 'Excel', pps: 'PowerPoint' };
   var PJ_MACROS = ['docm', 'xlsm', 'pptm', 'dotm', 'xltm', 'potm', 'ppsm', 'xlam', 'ppam', 'sldm'];
   var PJ_MAX_TOTAL = 15 * 1024 * 1024, PJ_MAX_NB = 10;
@@ -789,13 +789,40 @@
   }
   function hexa(tampon) { return Array.prototype.map.call(new Uint8Array(tampon), function (b) { return ('0' + b.toString(16)).slice(-2); }).join(''); }
 
+  // Page HTML : mêmes refus que le skill de validation (analyse_pj.py), ici pour éviter d'attendre. Une page déposée
+  // doit fonctionner hors ligne : rien ne se charge, rien ne s'envoie, aucun texte n'est évalué comme du code.
+  function controleHtml(o) {
+    var t;
+    try { t = new TextDecoder('utf-8', { fatal: true }).decode(o); } catch (e) { return 'encodage non reconnu : enregistrez la page en UTF-8.'; }
+    if (t.indexOf('\u0000') >= 0) { return 'ce n\'est pas une page HTML.'; }
+    if (!/<\s*(?:!doctype\s+html|html\b)/i.test(t.slice(0, 4096))) { return 'ce n\'est pas une page HTML (elle doit commencer par <!DOCTYPE html> ou <html>).'; }
+    var regles = [
+      [/<\s*(?:i?frame|frameset|embed|object|applet|base)\b/i, 'cadre ou objet intégré (iframe, embed, object) ou balise base'],
+      [/<\s*meta\b[^>]*http-equiv\s*=\s*["']?\s*(?:refresh|set-cookie)/i, 'redirection imposée par la page (meta refresh)'],
+      [/<\s*form\b[^>]*\baction\s*=\s*["']?\s*(?!#|["'>])/i, 'formulaire qui envoie des données (form action)'],
+      [/(?:^|[\s"'\/])(?:src|srcset|poster|data|background)\s*=\s*["']?\s*(?:https?:)?\/\//i, 'ressource distante (script, image, police…) : la page doit fonctionner hors ligne'],
+      [/<\s*(?:link|use|image|script)\b[^>]*\b(?:xlink:)?href\s*=\s*["']?\s*(?:https?:)?\/\//i, 'ressource distante (feuille de style, script…) : la page doit fonctionner hors ligne'],
+      [/url\(\s*["']?\s*(?:https?:)?\/\/|@import\b/i, 'ressource distante dans le style (url(…), @import)'],
+      [/\bfetch\s*\(/, 'appel réseau fetch()'],
+      [/XMLHttpRequest/, 'appel réseau XMLHttpRequest'],
+      [/\b(?:WebSocket|EventSource|RTCPeerConnection)\b|sendBeacon/, 'connexion réseau ou envoi de données'],
+      [/\bimportScripts\s*\(|\bnew\s+(?:Shared)?Worker\s*\(|serviceWorker/, 'Worker ou chargement de script distant'],
+      [/(?:^|[^\w.$])(?:import|eval)\s*\(|\bnew\s+Function\s*\(|\bdocument\s*\.\s*write(?:ln)?\s*\(/, 'évaluation de texte comme du code (eval, new Function, import(), document.write)']
+    ];
+    for (var i = 0; i < regles.length; i++) {
+      if (regles[i][0].test(t)) { return 'cette page contient : ' + regles[i][1] + '. Une page déposée ne doit rien charger, envoyer ni évaluer.'; }
+    }
+    return null;
+  }
+
   // Premier contrôle, dans le navigateur : rapide, pour éviter d'attendre un refus. Le vrai contrôle est fait à la réception et à la validation.
   function controlePj(nom, tampon) {
     var ext = extension(nom), o = new Uint8Array(tampon);
     if (PJ_ANCIENS[ext]) { return 'ancien format ' + PJ_ANCIENS[ext] + ' : il ne peut pas être contrôlé. Ouvrez-le, puis « Enregistrer sous » au format ' + { Word: '.docx', Excel: '.xlsx', PowerPoint: '.pptx' }[PJ_ANCIENS[ext]] + '.'; }
     if (PJ_MACROS.indexOf(ext) >= 0) { return 'format à macros : refusé. Enregistrez-le sans macros.'; }
-    if (PJ_EXT.indexOf(ext) < 0) { return 'type non accepté (.' + (ext || '?') + '). Acceptés : .docx, .xlsx, .pptx, .pdf.'; }
+    if (PJ_EXT.indexOf(ext) < 0) { return 'type non accepté (.' + (ext || '?') + '). Acceptés : .docx, .xlsx, .pptx, .pdf, .html.'; }
     if (!o.length) { return 'fichier vide.'; }
+    if (ext === 'html' || ext === 'htm') { return controleHtml(o); }
     var brut = new TextDecoder('latin1').decode(o);
     if (ext === 'pdf') {
       if (brut.slice(0, 1024).indexOf('%PDF-') < 0) { return 'ce n\'est pas un vrai PDF.'; }

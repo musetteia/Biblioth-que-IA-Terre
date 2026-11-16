@@ -123,5 +123,24 @@ ok('jeton expiré après 30 min', (() => { const x = monde(PROPS()); const tt = 
 ok('requête trop grosse refusée', monde(PROPS()).post('x'.repeat(23 * 1024 * 1024)).ok === false);
 ok('JSON illisible refusé', monde(PROPS()).post('{pas du json').ok === false);
 
+
+console.log('Taille du texte et pages HTML');
+const html = (extra) => Buffer.from('<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"></head><body>' + (extra || 'ok') + '</body></html>');
+let big = jeton(w = monde(PROPS()), A);
+ok('500 000 caractères de contenu acceptés', w.post({ adresse: A, jeton: big, p: depot({ contenu: 'a'.repeat(500000) }) }).ok === true);
+big = jeton(w = monde(PROPS()), A);
+ok('500 001 caractères refusés', (() => { const x = w.post({ adresse: A, jeton: big, p: depot({ contenu: 'a'.repeat(500001) }) }); return x.ok === false && w.fichiers.length === 0; })());
+big = jeton(w = monde(PROPS()), A);
+ok('texte à guillemets et retours à la ligne (JSON gonflé) : 500 000 caractères acceptés', w.post({ adresse: A, jeton: big, p: depot({ contenu: '"x"\n'.repeat(100000) }) }).ok === true);
+w = monde(PROPS()); t = jeton(w, A);
+r = w.post({ adresse: A, jeton: t, p: depot({ pieces_jointes: [pj('outil.html', html()), pj('note.docx', zip)] }) });
+ok('page HTML en pièce jointe acceptée', r.ok === true, r);
+ok('page HTML conservée à l\'identique', Buffer.from(JSON.parse(w.fichiers[0].c).pieces_jointes[0].contenu_b64, 'base64').equals(html()));
+w = monde(PROPS());
+for (const [nom, buf] of [['faux.html', Buffer.from('juste du texte')], ['nul.html', Buffer.concat([html(), Buffer.from([0])]).slice(0, 5)], ['bin.html', zip], ['page.js', Buffer.from('<html>')], ['page.htm.exe', html()]]) {
+  const tt = jeton(w, A); const n = w.fichiers.length; const x = w.post({ adresse: A, jeton: tt, p: depot({ pieces_jointes: [pj(nom, buf)] }) });
+  ok('refusé : ' + nom, x.ok === false && w.fichiers.length === n, x);
+}
+
 console.log(echecs ? '\n' + echecs + ' ECHEC(S)' : '\nTous les tests passent.');
 process.exit(echecs ? 1 : 0);

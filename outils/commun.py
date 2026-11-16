@@ -16,11 +16,11 @@ MODELES = RACINE / "modele"
 INTERFACE = RACINE / "interface"
 
 EXTENSIONS_AUTORISEES = {".md", ".txt", ".py", ".json", ".csv", ".yaml", ".yml"}
-TAILLE_MAX_FICHIER = 200_000  # octets
+TAILLE_MAX_FICHIER = 1_000_000  # octets (500 000 caractères de texte au maximum à la réception ; marge pour les accents)
 
-# Pièces jointes (documents Office et PDF) : uniquement dans projets/<id>/pieces-jointes/, jamais lues comme du texte.
+# Pièces jointes (documents Office, PDF et pages HTML autonomes) : uniquement dans projets/<id>/pieces-jointes/, jamais lues comme du texte.
 DOSSIER_PJ = "pieces-jointes"
-EXTENSIONS_PJ = {".docx", ".xlsx", ".pptx", ".pdf"}
+EXTENSIONS_PJ = {".docx", ".xlsx", ".pptx", ".pdf", ".html", ".htm"}
 
 
 def est_piece_jointe(rel):

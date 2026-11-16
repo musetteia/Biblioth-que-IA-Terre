@@ -2,7 +2,7 @@
    Source : boite-de-depot/Code.gs (bloc EPURER). */
 var Epurer = (function () {
   var MARQUAGES = /(^|[^A-Za-zÀ-ÿ])(DIFFUSION\s+RESTREINTE|CONFIDENTIEL(?:\s+D[ÉE]FENSE)?|SECRET(?:\s+D[ÉE]FENSE)?|TR[ÈE]S\s+SECRET|NON\s+PROT[ÉE]G[ÉE]|RESTRICTED|NATO\s+(?:SECRET|CONFIDENTIAL|RESTRICTED))(?![A-Za-zÀ-ÿ])/g;
-  var COURRIEL = /[\w.+-]+@([\w-]+(?:\.[\w-]+)+)/g;
+  var COURRIEL = /(?<![\w.+-])[\w.+-]+@([\w-]+(?:\.[\w-]+)+)/g;
   var DOMAINE_FICTIF = /(^|\.)(example\.(com|org|net)|invalid|test|example)$/;
   var TELEPHONE = /(^|[^\d.])((?:(?:\+33|0033)[ .-]?\(?0?\)?|0)[1-9](?:[ .-]?\d{2}){4})(?!\d)/g;
   var IP = /(^|[^\d])((?:\d{1,3}\.){3}\d{1,3})(?!\d)(?!\.\d)/g;

