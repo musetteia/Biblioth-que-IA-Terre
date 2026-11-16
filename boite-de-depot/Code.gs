@@ -28,7 +28,7 @@
 // ===== EPURER:DEBUT (ce bloc est recopié tel quel dans interface/epurer.js) =====
 var Epurer = (function () {
   var MARQUAGES = /(^|[^A-Za-zÀ-ÿ])(DIFFUSION\s+RESTREINTE|CONFIDENTIEL(?:\s+D[ÉE]FENSE)?|SECRET(?:\s+D[ÉE]FENSE)?|TR[ÈE]S\s+SECRET|NON\s+PROT[ÉE]G[ÉE]|RESTRICTED|NATO\s+(?:SECRET|CONFIDENTIAL|RESTRICTED))(?![A-Za-zÀ-ÿ])/g;
-  var COURRIEL = /[\w.+-]+@([\w-]+(?:\.[\w-]+)+)/g;
+  var COURRIEL = /(?<![\w.+-])[\w.+-]+@([\w-]+(?:\.[\w-]+)+)/g;
   var DOMAINE_FICTIF = /(^|\.)(example\.(com|org|net)|invalid|test|example)$/;
   var TELEPHONE = /(^|[^\d.])((?:(?:\+33|0033)[ .-]?\(?0?\)?|0)[1-9](?:[ .-]?\d{2}){4})(?!\d)/g;
   var IP = /(^|[^\d])((?:\d{1,3}\.){3}\d{1,3})(?!\d)(?!\.\d)/g;
@@ -171,11 +171,12 @@ var Epurer = (function () {
 // ===== EPURER:FIN =====
 
 var LIBELLES = { marquage: 'marquage', nom: 'nom de personne (prénom et nom)', courriel: 'adresse électronique', telephone: 'numéro de téléphone', cle: 'clé ou mot de passe', ip: 'adresse IP' };
-var MAX_OCTETS_SANS_PJ = 200000;            // taille maximale d'un dépôt sans pièce jointe
+var MAX_CONTENU = 500000;                   // caractères du champ « contenu » (le formulaire du site applique la même limite)
+var MAX_OCTETS_SANS_PJ = 1100000;            // longueur du texte du dépôt une fois en JSON (marge pour les guillemets et retours à la ligne échappés)
 var MAX_OCTETS_DEPOT = 22 * 1024 * 1024;     // 15 Mo de pièces jointes, encodées en base64, plus le texte
 var MAX_PJ_OCTETS = 15 * 1024 * 1024;
 var MAX_PJ_NOMBRE = 10;
-var EXT_PJ = { docx: 'PK', xlsx: 'PK', pptx: 'PK', pdf: '%PDF' };
+var EXT_PJ = { docx: 'PK', xlsx: 'PK', pptx: 'PK', pdf: '%PDF', html: '<', htm: '<' };   // html : page autonome, contrôlée à fond par le skill de validation
 var MAX_PAR_HEURE = 30;       // dépôts acceptés par heure, tous émetteurs confondus
 var MAX_DEPOTS_PAR_ADRESSE_JOUR = 6;
 var MAX_CODES_PAR_ADRESSE_HEURE = 3;
@@ -407,13 +408,18 @@ function controlerPj_(liste) {
     }
     var m = /\.([A-Za-z0-9]{2,5})$/.exec(x.nom);
     var ext = m ? m[1].toLowerCase() : '';
-    if (!EXT_PJ.hasOwnProperty(ext)) { return { ok: false, erreur: 'Type de pièce jointe non accepté : ' + x.nom.slice(0, 60) + ' (acceptés : .docx .xlsx .pptx .pdf).' }; }
+    if (!EXT_PJ.hasOwnProperty(ext)) { return { ok: false, erreur: 'Type de pièce jointe non accepté : ' + x.nom.slice(0, 60) + ' (acceptés : .docx .xlsx .pptx .pdf .html).' }; }
     if (!/^[A-Za-z0-9+\/]*={0,2}$/.test(x.contenu_b64) || x.contenu_b64.length % 4 !== 0) { return { ok: false, erreur: 'Pièce jointe illisible : ' + x.nom.slice(0, 60) }; }
     var octets = Utilities.base64Decode(x.contenu_b64);
     total += octets.length;
     if (total > MAX_PJ_OCTETS) { return { ok: false, erreur: 'Pièces jointes trop lourdes (maximum 15 Mo au total).' }; }
     var debut = octets.slice(0, 8).map(function (b) { return String.fromCharCode(b < 0 ? b + 256 : b); }).join('');
-    if (debut.indexOf(EXT_PJ[ext]) !== 0 && !(ext === 'pdf' && debut.indexOf('%PDF') >= 0)) {
+    if (ext === 'html' || ext === 'htm') {
+      var tete = octets.slice(0, 1024).map(function (b) { return String.fromCharCode(b < 0 ? b + 256 : b); }).join('');
+      if (tete.indexOf('\u0000') >= 0 || !/<\s*(?:!doctype\s+html|html\b)/i.test(tete)) {
+        return { ok: false, erreur: 'Le contenu de « ' + x.nom.slice(0, 60) + ' » n\'est pas une page HTML.' };
+      }
+    } else if (debut.indexOf(EXT_PJ[ext]) !== 0 && !(ext === 'pdf' && debut.indexOf('%PDF') >= 0)) {
       return { ok: false, erreur: 'Le contenu de « ' + x.nom.slice(0, 60) + ' » ne correspond pas à son type.' };
     }
     var h = hex_(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, octets));
@@ -437,6 +443,9 @@ function traiter_(enveloppe) {
   try { jeton = JSON.parse(cache.get(cleJeton) || 'null'); } catch (err) { jeton = null; }
   if (!adresse || !enveloppe.jeton || !jeton || jeton.a !== adresse) {
     return { ok: false, erreur: 'Adresse non vérifiée ou vérification expirée. Recommencez la vérification par code.', verification: true };
+  }
+  if (typeof p.contenu === 'string' && p.contenu.length > MAX_CONTENU) {
+    return { ok: false, erreur: 'Le contenu est trop long (' + MAX_CONTENU + ' caractères au maximum).' };
   }
   var pjBrut = p.pieces_jointes;
   delete p.pieces_jointes;                                              // le base64 ne doit jamais passer par l'épuration de texte

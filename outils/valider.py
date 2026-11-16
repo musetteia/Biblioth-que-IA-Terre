@@ -24,7 +24,7 @@ MARQUAGES = re.compile(
     r"(?<![%s])(DIFFUSION\s+RESTREINTE|CONFIDENTIEL(?:\s+D[ÉE]FENSE)?|SECRET(?:\s+D[ÉE]FENSE)?|"
     r"TR[ÈE]S\s+SECRET|NON\s+PROT[ÉE]G[ÉE]|RESTRICTED|NATO\s+(?:SECRET|CONFIDENTIAL|RESTRICTED))(?![%s])" % (LETTRES, LETTRES)
 )
-COURRIEL = re.compile(r"[\w.+-]+@([\w-]+(?:\.[\w-]+)+)")
+COURRIEL = re.compile(r"(?<![\w.+-])[\w.+-]+@([\w-]+(?:\.[\w-]+)+)")
 DOMAINES_EXEMPLES = ("example.com", "example.org", "example.net", ".invalid", ".test", ".example")
 TELEPHONE = re.compile(r"(?<![\d.])(?:\+33|0033|0)[1-9](?:[ .-]?\d{2}){4}(?![\d])")
 ADRESSE_IP = re.compile(r"(?<!\d)(?<!\d\.)(?:\d{1,3}\.){3}\d{1,3}(?!\d)(?!\.\d)")

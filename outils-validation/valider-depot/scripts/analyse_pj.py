@@ -5,8 +5,9 @@ Module commun au skill « valider-depot » et au robot de la bibliothèque : le 
 règles, tourne chez le validateur puis à la fusion. Il ne fait AUCUN accès réseau, n'exécute aucun
 fichier analysé et n'utilise que la bibliothèque standard de Python.
 
-Types acceptés : .docx, .xlsx, .pptx, .pdf. Tout le reste est refusé (anciens formats .doc/.xls/.ppt,
-fichiers à macros, archives, exécutables, fichiers chiffrés).
+Types acceptés : .docx, .xlsx, .pptx, .pdf et .html (outil autonome : une seule page, sans aucune connexion).
+Tout le reste est refusé (anciens formats .doc/.xls/.ppt, fichiers à macros, archives, exécutables, fichiers
+chiffrés).
 
 Pour chaque fichier, l'analyse :
   - vérifie que le type réel correspond à l'extension ;
@@ -37,10 +38,10 @@ RATIO_MAX = 100                        # rapport de compression suspect (au-del�
 MAX_FLUX_PDF = 64 * 1024 * 1024
 MAX_FLUX_PDF_TOTAL = 256 * 1024 * 1024
 
-EXT_ACCEPTEES = {".docx": "docx", ".xlsx": "xlsx", ".pptx": "pptx", ".pdf": "pdf"}
+EXT_ACCEPTEES = {".docx": "docx", ".xlsx": "xlsx", ".pptx": "pptx", ".pdf": "pdf", ".html": "html", ".htm": "html"}
 EXT_ANCIENNES = {".doc": "Word", ".xls": "Excel", ".ppt": "PowerPoint", ".dot": "Word", ".xlt": "Excel", ".pps": "PowerPoint"}
 EXT_MACROS = {".docm", ".xlsm", ".pptm", ".dotm", ".xltm", ".potm", ".ppsm", ".xlam", ".ppam", ".sldm"}
-NOMS_TYPE = {"docx": "Word", "xlsx": "Excel", "pptx": "PowerPoint", "pdf": "PDF"}
+NOMS_TYPE = {"docx": "Word", "xlsx": "Excel", "pptx": "PowerPoint", "pdf": "PDF", "html": "HTML"}
 
 GENERIQUES = {"", "[personne]", "xx", "claude", "python-docx", "python-pptx", "openpyxl", "unknown", "anonymous",
               "anonyme", "author", "auteur", "user", "utilisateur", "microsoft office user", "office user",
@@ -434,6 +435,132 @@ def _controles_contenu(texte, res):
     res["alertes"] += repere_consignes(texte, "contenu du document")
 
 
+
+# -- analyse d'une page HTML (outil autonome) -------------------------------------------------------------------
+# Règle : une page HTML déposée doit fonctionner HORS LIGNE et sans rien charger ni envoyer. Tout appel réseau,
+# toute ressource distante, tout cadre intégré, toute évaluation de texte comme du code est refusé.
+# Limite connue : un script volontairement obscurci (noms d'API reconstitués à l'exécution) échappe à une analyse
+# de texte. La relecture du validateur et l'ouverture du fichier hors ligne restent le vrai filet de sécurité.
+HTML_REFUS_CODE = [
+    (re.compile(r"\bfetch\s*\("), "appel réseau fetch()"),
+    (re.compile(r"XMLHttpRequest"), "appel réseau XMLHttpRequest"),
+    (re.compile(r"\b(?:WebSocket|EventSource|RTCPeerConnection)\b"), "connexion réseau (WebSocket, EventSource ou WebRTC)"),
+    (re.compile(r"sendBeacon"), "envoi de données (sendBeacon)"),
+    (re.compile(r"\bimportScripts\s*\("), "chargement de script distant (importScripts)"),
+    (re.compile(r"\bnew\s+(?:Shared)?Worker\s*\(|serviceWorker"), "Worker ou service worker"),
+    (re.compile(r"(?<![\w.$])import\s*\("), "import dynamique de module"),
+    (re.compile(r"(?<![\w.$])eval\s*\("), "évaluation de texte comme du code (eval)"),
+    (re.compile(r"\bnew\s+Function\s*\("), "évaluation de texte comme du code (new Function)"),
+    (re.compile(r"\bdocument\s*\.\s*write(?:ln)?\s*\("), "écriture dynamique de la page (document.write)"),
+]
+HTML_REFUS_BALISES = [
+    (re.compile(r"<\s*(?:i?frame|frameset|embed|object|applet)\b", re.I), "cadre ou objet intégré (iframe, embed, object)"),
+    (re.compile(r"<\s*base\b", re.I), "balise base"),
+    (re.compile(r"<\s*meta\b[^>]*http-equiv\s*=\s*[\"']?\s*(?:refresh|set-cookie)", re.I), "redirection ou cookie imposé par la page (meta)"),
+    (re.compile(r"<\s*form\b[^>]*\baction\s*=\s*[\"']?\s*(?!#|[\"'>])", re.I), "formulaire qui envoie des données (form action)"),
+    (re.compile(r"(?<=[\s\"'])(?:formaction|ping)\s*=", re.I), "attribut d'envoi (formaction, ping)"),
+]
+HTML_DISTANT = re.compile(r"""(?<=[\s"'/])(?:src|srcset|poster|data|background)\s*=\s*["']?\s*(?:https?:)?//""", re.I)
+HTML_DISTANT_HREF = re.compile(r"""<\s*(?:link|use|image|script)\b[^>]*\b(?:xlink:)?href\s*=\s*["']?\s*(?:https?:)?//""", re.I)
+HTML_DISTANT_A = re.compile(r"""<\s*a\b[^>]*\bhref\s*=\s*["']?\s*((?:https?:)?//[^\s"'>]+)""", re.I)
+HTML_CSS_DISTANT = re.compile(r"""(?:url\(\s*["']?\s*(?:https?:)?//|@import\b)""", re.I)
+HTML_SCRIPT_RELATIF = re.compile(r"<\s*(?:script|link)\b[^>]*\b(?:src|href)\s*=\s*[\"']?\s*(?!#|data:|https?:|//|[\"'>])", re.I)
+HTML_ALERTE_CODE = [
+    (re.compile(r"\bwindow\s*\.\s*open\s*\(|\blocation\s*(?:\.\s*(?:href|assign|replace)\s*[=(]|=(?!=))"), "ouverture ou changement d'adresse de page (window.open, location)"),
+    (re.compile(r"(?<![\w.$])atob\s*\(|String\s*\.\s*fromCharCode\s*\("), "décodage de texte encodé (atob, fromCharCode) : à relire"),
+    (re.compile(r"document\s*\.\s*cookie"), "lecture ou écriture de cookies"),
+]
+HTML_BLOCS = re.compile(r"<\s*(script|style)\b[^>]*>(.*?)<\s*/\s*\1\s*>", re.I | re.S)
+HTML_META_PERSONNE = re.compile(
+    r"(<\s*meta\b[^>]*\bname\s*=\s*[\"']?(?:author|creator|dc\.creator|dcterms\.creator|publisher|designer|owner|reply-to|contact)[\"']?[^>]*?\bcontent\s*=\s*)([\"'])(.*?)\2",
+    re.I | re.S)
+HTML_META_PERSONNE_INV = re.compile(
+    r"(<\s*meta\b[^>]*?\bcontent\s*=\s*)([\"'])(.*?)\2([^>]*\bname\s*=\s*[\"']?(?:author|creator|dc\.creator|dcterms\.creator|publisher|designer|owner|reply-to|contact)[\"']?)",
+    re.I | re.S)
+
+
+def _texte_visible_html(texte):
+    sans = re.sub(r"<!--.*?-->", " ", texte, flags=re.S)
+    sans = HTML_BLOCS.sub(" ", sans)
+    sans = re.sub(r"<[^>]*>", " ", sans)
+    return html.unescape(sans)
+
+
+def _analyser_html(octets, res):
+    """Page HTML : refuse tout ce qui charge, envoie ou évalue ; anonymise les métadonnées de personnes ;
+    signale le reste. Renvoie les octets finaux (identiques à l'original si rien n'a été anonymisé)."""
+    if b"\x00" in octets:
+        res["refus"].append("le fichier contient des octets nuls : ce n'est pas une page HTML.")
+        return octets
+    try:
+        texte = octets.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        res["refus"].append("encodage non reconnu : la page doit être enregistrée en UTF-8.")
+        return octets
+    if not re.search(r"<\s*(?:!doctype\s+html|html\b)", texte[:4096], re.I):
+        res["refus"].append("le contenu réel n'est pas une page HTML (ni « <!DOCTYPE html> » ni « <html » au début).")
+        return octets
+    for motif, libelle in HTML_REFUS_BALISES:
+        if motif.search(texte):
+            res["refus"].append("la page contient une %s : une page déposée ne doit rien intégrer, rediriger ni envoyer." % libelle if libelle.startswith("balise") else
+                                "la page contient : %s. Une page déposée ne doit rien intégrer, rediriger ni envoyer." % libelle)
+    if HTML_DISTANT.search(texte) or HTML_DISTANT_HREF.search(texte) or HTML_CSS_DISTANT.search(texte):
+        res["refus"].append("la page charge une ressource distante (script, image, feuille de style, police, « @import ») : "
+                            "une page déposée doit fonctionner hors ligne, avec tout ce dont elle a besoin dans le fichier.")
+    blocs = [m.group(2) for m in HTML_BLOCS.finditer(texte)]
+    code = "\n".join(blocs)
+    for motif, libelle in HTML_REFUS_CODE:
+        if motif.search(code):
+            res["refus"].append("le code de la page contient : %s. Une page déposée ne doit contacter aucun serveur ni évaluer de texte comme du code." % libelle)
+    # scripts inline dans les attributs (onclick="fetch(...)") : on cherche aussi dans l'ensemble de la page
+    for motif, libelle in HTML_REFUS_CODE:
+        if motif.search(texte) and not motif.search(code):
+            res["refus"].append("la page contient : %s (dans un attribut de balise). Une page déposée ne doit contacter aucun serveur ni évaluer de texte comme du code." % libelle)
+    if HTML_SCRIPT_RELATIF.search(texte):
+        res["alertes"].append("la page référence un fichier voisin (script ou feuille de style en chemin relatif) : il ne sera pas fourni. Tout doit être dans le fichier.")
+    liens = HTML_DISTANT_A.findall(texte)
+    if liens:
+        hotes = sorted({re.sub(r"^(?:https?:)?//", "", l).split("/")[0].lower() for l in liens})[:5]
+        res["alertes"].append("la page contient %d lien(s) cliquable(s) vers l'extérieur (%s) : ils ne se chargent pas seuls, mais le validateur doit les vérifier." % (len(liens), ", ".join(hotes)))
+    for motif, libelle in HTML_ALERTE_CODE:
+        if motif.search(code):
+            res["alertes"].append("le code de la page contient : %s." % libelle)
+    # contenu : texte visible (noms, adresses, numéros, marquages, clés), puis code (clés : refus, marquage : alerte)
+    _controles_contenu(_texte_visible_html(texte), res)
+    if code:
+        _, c = _vd().epurer_texte(code)
+        if c["cle"]:
+            res["refus"].append("clé, jeton ou mot de passe apparent dans le code de la page (%d) : l'auteur doit le révoquer." % c["cle"])
+        if c["marquage"]:
+            res["alertes"].append("le code de la page contient %d mention(s) de protection (DIFFUSION RESTREINTE, CONFIDENTIEL…) : à vérifier (une règle de contrôle qui cite ces mots est tolérée, un contenu protégé non)." % c["marquage"])
+        res["alertes"] += repere_consignes(code, "code de la page")
+    # métadonnées de personnes
+    nouveau = texte
+    compte = 0
+
+    def _masque(m):
+        nonlocal compte
+        valeur = m.group(3)
+        if _generique(valeur):
+            return m.group(0)
+        compte += 1
+        return m.group(1) + m.group(2) + PERSONNE + m.group(2)
+
+    def _masque_inv(m):
+        nonlocal compte
+        valeur = m.group(3)
+        if _generique(valeur):
+            return m.group(0)
+        compte += 1
+        return m.group(1) + m.group(2) + PERSONNE + m.group(2) + m.group(4)
+    nouveau = HTML_META_PERSONNE.sub(_masque, nouveau)
+    nouveau = HTML_META_PERSONNE_INV.sub(_masque_inv, nouveau)
+    if compte:
+        res["anonymises"]["metadonnees_html"] = compte
+        return nouveau.encode("utf-8")
+    return octets
+
+
 # -- analyse d'un PDF -----------------------------------------------------------------------------------------
 FILTRES_IMAGE = {b"DCTDecode", b"DCT", b"JPXDecode", b"CCITTFaxDecode", b"CCF", b"JBIG2Decode"}
 
@@ -728,13 +855,16 @@ def analyser_fichier(nom_origine, octets):
     elif ext in EXT_MACROS:
         res["refus"].append("format à macros (%s) : refusé. Enregistrer sans macros (%s)." % (ext, ext[:-1] + "x"))
     elif ext not in EXT_ACCEPTEES:
-        res["refus"].append("type de fichier non accepté (%s). Acceptés : .docx, .xlsx, .pptx, .pdf." % (ext or "sans extension"))
+        res["refus"].append("type de fichier non accepté (%s). Acceptés : .docx, .xlsx, .pptx, .pdf, .html." % (ext or "sans extension"))
     elif not octets:
         res["refus"].append("fichier vide.")
     else:
         type_ = EXT_ACCEPTEES[ext]
         res["type"] = type_
-        signature_ok = octets[:4] == b"PK\x03\x04" if type_ != "pdf" else b"%PDF-" in octets[:1024]
+        if type_ == "html":
+            signature_ok = True            # le type réel est vérifié par l'analyse HTML elle-même
+        else:
+            signature_ok = octets[:4] == b"PK\x03\x04" if type_ != "pdf" else b"%PDF-" in octets[:1024]
         if not signature_ok:
             if octets[:8] == b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1":
                 res["refus"].append("le contenu réel est un ancien format Office (OLE) malgré l'extension %s." % ext)
@@ -742,7 +872,8 @@ def analyser_fichier(nom_origine, octets):
                 res["refus"].append("le contenu réel ne correspond pas à l'extension %s." % ext)
         else:
             try:
-                final = _analyser_pdf(octets, res) if type_ == "pdf" else _analyser_ooxml(octets, type_, res)
+                final = (_analyser_pdf(octets, res) if type_ == "pdf" else
+                         _analyser_html(octets, res) if type_ == "html" else _analyser_ooxml(octets, type_, res))
             except (ValueError, RuntimeError, MemoryError) as e:
                 res["refus"].append("analyse impossible : %s." % e)
                 final = octets
@@ -796,4 +927,8 @@ def controles_acceptes(type_):
             "aucun mot de passe, aucune mention de protection"]
     if type_ == "pdf":
         return base + ["aucun JavaScript, aucun lancement de programme"]
+    if type_ == "html":
+        return ["type réel conforme à l'extension", "aucun appel réseau, aucune ressource distante, aucun cadre intégré",
+                "aucune évaluation de texte comme du code", "aucun mot de passe, aucune mention de protection",
+                "métadonnées de personnes anonymisées"]
     return base + ["aucune macro", "métadonnées de personnes anonymisées"]

