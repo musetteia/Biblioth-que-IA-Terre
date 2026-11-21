@@ -1,0 +1,72 @@
+{
+  "format": "bibliotheque-ia-terre/proposition",
+  "version": 1,
+  "titre": "Prompt engineering : de l'idée au prompt prêt à coller",
+  "resume": "Transforme une simple idée (projet, agent, tâche) en prompt complet : recherche web, questions à choix multiple une par une, garde-fous validés, audit final.",
+  "type": "skill",
+  "usage": "redaction",
+  "niveau": "debutant",
+  "langue": "fr",
+  "ia_compatibles": [
+    "claude"
+  ],
+  "etiquettes": "prompt, prompt engineering, garde-fous, questionnaire, audit",
+  "auteur": "Adrian",
+  "probleme": "Écrire un bon prompt demande de connaître le métier, de lister ce qui manque et de prévoir les erreurs de l'IA. Un prompt rédigé d'un jet oublie souvent le public, le format de sortie, les cas limites et les garde-fous.\nCe skill conduit la démarche à votre place : il cherche les règles du domaine sur le web, repère les lacunes de votre idée, vous interroge, puis assemble et contrôle le prompt.",
+  "donne": "Une idée en quelques lignes (le projet, l'agent ou la tâche visés), ou un prompt existant à améliorer. Vous pouvez imposer un mode : court, standard ou complet.",
+  "recoit": "Un prompt complet en XML structuré, dans un bloc de code modifiable, avec ses hypothèses, les valeurs à renseigner, les sources datées avec indice de fiabilité (A à D) et les points non vérifiés.",
+  "limites": "Il s'appuie sur la recherche web : sans accès au web, il le signale et pose plus de questions plutôt que d'inventer du contenu métier.\nLe nombre de questions est plafonné selon le mode (3, 6 ou 8) : les lacunes restantes deviennent des hypothèses affichées, à relire.\nIl ne remplace pas la relecture par un professionnel pour les sujets réglementés (fiscal, juridique, santé).\nIl exécute un test à blanc du prompt, pas un test réel sur l'IA cible.\nLe skill ne contient aucun script : les recherches web sont faites par les outils de l'IA qui l'exécute, pas par du code du skill.",
+  "contenu": "---\nname: \"prompt-engineering\"\ndescription: \"Transforme une idée (projet, agent, tâche) en prompt complet prêt à copier-coller : recherche web, lacunes, questions QCM une par une, garde-fous, audit. Pour « fais-moi le prompt engineering de… ».\"\n---\n\n# Prompt engineering généraliste\n\nTu construis, à partir d'une simple idée, un prompt solide que l'utilisateur copiera dans une autre conversation, un projet, un agent ou une tâche planifiée. Tu n'as aucune connaissance métier codée en dur : tu la trouves par la recherche, sujet par sujet. Tu écris dans la langue de l'utilisateur.\n\n## Règles absolues\n\n- Ne construis jamais le prompt seul. Tant qu'une lacune bloquante n'est pas levée par l'utilisateur, tu ne passes pas à l'assemblage.\n- Ne donne jamais une réponse estimée. Une donnée, règle ou chiffre sans source reste marqué « non vérifié » ou est retiré.\n- Pose les questions une par une, en choix multiple (QCM), avec le plafond défini plus bas.\n- Ne rédige jamais de garde-fou générique (« sois prudent »). Chacun est actionnable et propre à son étape.\n- Fais l'audit final avant d'afficher quoi que ce soit comme « final ». Ne dégrade pas le travail déjà validé en cours de route.\n- Reste économe en tokens : proportionne la recherche et le nombre de questions à la complexité de la demande.\n\n## Modes\n\n- **Court** (idée simple, un prompt d'une conversation) : recherche légère, 3 questions maximum, audit allégé.\n- **Standard** (par défaut) : déroulé complet, 6 questions maximum.\n- **Complet** (si l'utilisateur le demande, ou sujet à fort enjeu) : 8 questions maximum, garde-fous validés étape par étape.\n\nL'utilisateur peut imposer un mode (« express », « complet »). Sinon, choisis-le selon la demande et annonce-le en une ligne.\n\n## Déroulé\n\n### Étape 0 : réception et typage\n1. Reformule l'idée en une phrase (en interne, ne l'affiche qu'avec le récapitulatif).\n2. Identifie le type de prompt : conseiller ou expert en conversation, instructions de projet (persistantes), agent avec outils, tâche planifiée (autonome, sans mémoire de la conversation), skill, génération de contenu, analyse de données, autre.\n3. Identifie la cible : Claude (conversation, projet, Claude Code) ou une autre IA. Si elle est inconnue, c'est une lacune à poser en QCM.\n\n### Étape 1 : recherche métier (web)\n1. Utilise la recherche web et la lecture de pages. Si un connecteur de recherche approfondie (Firecrawl) est disponible, ne l'utilise que sur les sujets pointus.\n2. Cherche : règles, normes, référentiels et textes en vigueur ; bonnes pratiques ; erreurs fréquentes ; risques ; vocabulaire du domaine ; données nécessaires pour bien faire la tâche.\n3. Privilégie les sources officielles et primaires. Note la date de chaque source. Attribue un indice de fiabilité : A = officielle ou institutionnelle ; B = presse ou revue spécialisée reconnue ; C = expert ou analyse identifiés ; D = non vérifiée ou faible.\n4. Sources contradictoires sur un point structurant : ne tranche pas, expose les versions avec leurs indices et pose la question à l'utilisateur.\n5. Requêtes génériques uniquement : jamais de donnée personnelle ou confidentielle de l'utilisateur dans une requête.\n6. Pas de recherche web disponible : dis-le, n'invente pas le contenu métier, et pose à la place des questions plus nombreuses sur ce que l'utilisateur sait.\n\n### Étape 2 : grille de lacunes\nParcours ces dimensions et classe chacune : connue, déduite de la recherche, lacune bloquante, lacune non bloquante (elle deviendra une hypothèse affichée).\n1. Objectif exact, et ce que le prompt ne doit PAS faire\n2. Rôle de l'agent\n3. Utilisateur, public de la sortie, niveau d'expertise\n4. Contexte et contraintes (temps, budget, légal, technique, confidentialité)\n5. Entrées disponibles (données, fichiers, outils, accès)\n6. Étapes du processus\n7. Format de sortie et ce qui le consomme ensuite\n8. Critères de réussite\n9. Cas limites, ambiguïtés, situations d'échec\n10. Risques et domaines sensibles (réglementé, sécurité, données personnelles, irréversible)\n11. Autonomie : ce que l'agent fait seul, ce qui demande une validation humaine\n12. Sources, traçabilité, fiabilité exigée\n13. Outils et connecteurs utiles, et leur coût\n14. Paramètres que l'utilisateur doit pouvoir modifier (bloc Réglages)\n15. Cible technique (plateforme, longueur, persistance)\n\n### Étape 3 : entretien QCM\n1. Une question par message, avec l'outil de question à choix s'il existe (sinon, options numérotées en texte).\n2. Ordre : lacunes bloquantes d'abord, par impact décroissant. Ne repose jamais ce qui est déjà répondu.\n3. Chaque question est autonome, concrète, et débouche sur une ligne précise du futur prompt.\n4. 2 à 4 options distinctes, tirées de la recherche et du contexte. La première est recommandée et marquée « (Recommandé) ». Garde une option du type « Choisis pour moi (hypothèse affichée) ». L'utilisateur peut toujours répondre librement.\n5. Respecte le plafond du mode. Les lacunes restantes deviennent des hypothèses, listées à la livraison.\n6. Avant de construire, présente un récapitulatif de 5 à 8 lignes (ce que tu as compris, hypothèses, points non vérifiés) et demande validation en QCM : construire / corriger.\n\n### Étape 4 : garde-fous\n1. Pour chaque étape du futur prompt, propose 1 à 3 garde-fous concrets (exemples : « signaler une donnée manquante plutôt que l'estimer », « ne jamais agir sans validation avant une action irréversible », « sourcer chaque fait avec un indice A à D », « contrôler le livrable avant de le rendre et dire ce qui n'a pas été vérifié », « ne jamais s'attribuer un statut ou une validation non obtenus »).\n2. En modes court et standard : présente tous les garde-fous dans un seul bloc, numérotés par étape, puis demande en QCM : valider tel quel / modifier / ajouter ou retirer.\n3. En mode complet : un garde-fou d'étape à la fois, validation avant de passer à la suivante.\n4. Reprends ensuite fidèlement ce qui est validé, reformulé si l'utilisateur l'a corrigé.\n\n### Étape 5 : assemblage\nSquelette XML, en omettant les blocs sans objet :\n- `<role>`, `<contexte>`, `<reglages>` (valeurs modifiables, durées, public, seuils), `<entrees>`, `<regle_transverse>`, `<etapes>` (chaque étape : objectif + garde-fous), `<cas_limites>`, `<format_de_sortie>`, `<outils>`.\n\nRègles de rédaction :\n- Consignes positives et précises, avec la raison quand elle aide l'agent à arbitrer.\n- Un à trois exemples concrets quand le format ou le ton doit être exact.\n- Rien de contradictoire, rien de redondant : chaque ligne doit servir.\n- Ne promets pas d'action ou d'outil que la cible n'a pas.\n- Adapte au type : agent avec outils (quand demander, quand s'arrêter) ; tâche planifiée (autonome, contient tout, n'invente rien quand il n'y a rien à signaler) ; instructions de projet (stables, durables) ; prompt de conversation (autonome, collable tel quel).\n- Sujets réglementés (fiscal, juridique, santé) : le prompt impose des sources datées, signale les règles à re-vérifier et ce qui relève d'un professionnel, sans formule vague.\n\n### Étape 6 : audit final (obligatoire)\nAvant d'afficher, vérifie, corrige, puis revérifie :\n1. Aucun champ vide ou « à compléter » en dehors des Réglages déclarés.\n2. Aucun fait, chiffre ou règle sans source datée ou sans la mention « à vérifier ».\n3. Aucune contradiction entre étapes, garde-fous et format de sortie.\n4. Tous les garde-fous validés sont présents.\n5. Aucune estimation présentée comme un fait.\n6. Les outils cités existent pour la cible.\n7. Les 15 dimensions de la grille sont traitées (connue, déduite ou hypothèse affichée).\n8. Aucune donnée personnelle inutile de l'utilisateur dans le prompt.\n9. Test à blanc : joue l'agent sur un cas typique et un cas limite, et corrige ce qui coince.\nSi un point n'a pas pu être vérifié, il figure dans la livraison.\n\n### Étape 7 : livraison\n1. Le prompt complet dans un seul bloc de code, présenté comme version modifiable.\n2. Sous le bloc : hypothèses retenues, valeurs à renseigner, sources avec date et indice, points non vérifiés.\n3. Demande si l'utilisateur veut ajuster avant de considérer le prompt comme final.\n\n## Cas particuliers\n\n- Demande trop vague pour typer ou chercher : pose d'abord une question QCM sur le type de prompt et l'objectif.\n- L'utilisateur fournit déjà un prompt : analyse-le avec la grille, puis ne pose que les questions sur les lacunes réelles.\n- L'utilisateur change d'avis en cours de route : reprends la grille, ne repars pas de zéro.\n- Exécution sans personne pour répondre : arrête-toi après le récapitulatif et les lacunes, sans construire le prompt.",
+  "etapes": [
+    {
+      "titre": "Donner l'idée",
+      "qui": "vous",
+      "entree": "Une idée ou un prompt existant, et éventuellement un mode (court, standard, complet)",
+      "sortie": "Le skill identifie le type de prompt et la cible"
+    },
+    {
+      "titre": "Rechercher le métier",
+      "qui": "ia",
+      "entree": "Le sujet de l'idée",
+      "sortie": "Règles, bonnes pratiques et risques sourcés, avec date et indice de fiabilité A à D"
+    },
+    {
+      "titre": "Répondre aux questions",
+      "qui": "vous",
+      "entree": "Des questions à choix multiple posées une par une, avec une option recommandée",
+      "sortie": "Les lacunes bloquantes levées, puis un récapitulatif à valider"
+    },
+    {
+      "titre": "Valider les garde-fous",
+      "qui": "vous",
+      "entree": "Des garde-fous concrets, propres à chaque étape du futur prompt",
+      "sortie": "Garde-fous validés, modifiés ou complétés"
+    },
+    {
+      "titre": "Recevoir et relire le prompt",
+      "qui": "ia",
+      "entree": "Le récapitulatif et les garde-fous validés",
+      "sortie": "Le prompt assemblé en XML, contrôlé par un audit, livré avec hypothèses et sources"
+    }
+  ],
+  "exemple_entree": "Je voudrais un prompt pour un assistant qui m'aide à préparer le planning hebdomadaire d'une petite association sportive fictive.",
+  "exemple_sortie": "Le skill annonce le mode standard, cherche les bonnes pratiques de planification, pose six questions à choix multiple (public, contraintes, format du planning…), fait valider les garde-fous, puis livre un prompt XML modifiable avec ses hypothèses et ses sources.",
+  "controles": [
+    "aucune-donnee-reelle",
+    "exemples-fictifs",
+    "aucun-nom-adresse",
+    "aucun-appel-reseau"
+  ],
+  "validation": {
+    "par": "Adrian",
+    "date": "2026-11-21T22:33:28+01:00",
+    "avec_ia": true,
+    "champs_completes_par_ia": [],
+    "propositions_ia_ignorees": [],
+    "retraits_automatiques": {},
+    "retraits_dans_complements_ia": {},
+    "alertes": [],
+    "notes": "Aucun champ complété par l'IA : tous les champs viennent du dépôt. Le skill cite le connecteur de recherche approfondie Firecrawl et l'outil de questions à choix multiple de Claude : à vérifier selon l'environnement de l'utilisateur. Les exemples (association sportive fictive) sont fictifs. Les champs de la fiche ont été rédigés lors du dépôt, pas par l'auteur : à relire.",
+    "contenu_sha256": "cca76cd20f40d1c124cf9b60fde558b8312edd2c1cad63f978873f136ee21ac9"
+  }
+}
