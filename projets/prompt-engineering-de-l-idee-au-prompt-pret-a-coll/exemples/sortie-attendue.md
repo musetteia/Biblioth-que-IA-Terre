@@ -1,0 +1,1 @@
+Le skill annonce le mode standard, cherche les bonnes pratiques de planification, pose six questions à choix multiple (public, contraintes, format du planning…), fait valider les garde-fous, puis livre un prompt XML modifiable avec ses hypothèses et ses sources.
