@@ -1,0 +1,86 @@
+{
+  "format": "bibliotheque-ia-terre/proposition",
+  "version": 1,
+  "titre": "Essai du circuit des applications",
+  "resume": "Petite application d'essai qui demande une phrase à Claude et l'enregistre, pour vérifier que le circuit des applications fonctionne.",
+  "type": "application",
+  "usage": "code-scripts",
+  "niveau": "debutant",
+  "langue": "fr",
+  "ia_compatibles": [
+    "claude"
+  ],
+  "etiquettes": "test, essai",
+  "auteur": "Adrian",
+  "probleme": "Vérifier de bout en bout que le site sait recevoir, valider et publier une application qui s'installe dans le propre Claude de l'utilisateur.",
+  "donne": "Rien : un clic sur un bouton.",
+  "recoit": "Une phrase courte écrite par Claude, enregistrée puis listée avec les quatre précédentes.",
+  "limites": "Application d'essai sans autre intérêt que le test.\nChaque appel compte sur le forfait Claude de l'utilisateur.\nLes phrases sont enregistrées dans sa base personnelle, visible de lui seul.",
+  "contenu": "# Essai du circuit des applications\n\nCette application ne sert qu'à vérifier que le circuit de dépôt, de validation et d'installation des applications fonctionne. Elle demande à Claude une phrase courte, l'affiche, puis l'enregistre dans votre base de données personnelle ; les cinq dernières phrases sont listées.\n\n## Contenu de l'archive\n\n| Fichier | Rôle |\n|---|---|\n| `index.html` | la page d'entrée |\n| `app.js` | le code de l'application |\n| `style.css` | la mise en forme |\n\n## Licences\n\nCode et mise en forme écrits pour cet essai, aucune bibliothèque ni police embarquée, aucune adresse chargée sur Internet.\n",
+  "etapes": [
+    {
+      "titre": "Installer l'application",
+      "entree": "archive .zip de la fiche",
+      "sortie": "artefact ouvert dans Claude",
+      "qui": "vous"
+    },
+    {
+      "titre": "Demander une phrase",
+      "entree": "clic sur le bouton",
+      "sortie": "phrase écrite par Claude et enregistrée",
+      "qui": "ia"
+    }
+  ],
+  "exemple_entree": "",
+  "exemple_sortie": "",
+  "controles": [
+    "aucune-donnee-reelle",
+    "exemples-fictifs",
+    "aucun-nom-adresse",
+    "seul-appel-claude"
+  ],
+  "capacites": [
+    "sample",
+    "db"
+  ],
+  "validation": {
+    "par": "Adrian",
+    "date": "2026-11-26T10:16:03+01:00",
+    "avec_ia": true,
+    "champs_completes_par_ia": [
+      "usage",
+      "niveau",
+      "langue",
+      "probleme",
+      "donne",
+      "recoit",
+      "limites",
+      "etapes"
+    ],
+    "propositions_ia_ignorees": [],
+    "retraits_automatiques": {},
+    "retraits_dans_complements_ia": {},
+    "alertes": [],
+    "notes": "",
+    "contenu_sha256": "814bfb7388e040527e1cacab25060527ababdcbe2a329131a17d71b906f141dc",
+    "pieces_jointes": [
+      {
+        "nom": "essai-circuit-application.zip",
+        "type": "application",
+        "taille": 1853,
+        "sha256": "afc3a0b50c0792d4c7b54127b6c2b0b751a8dfc07b174b9b5fc8840c6b109755",
+        "anonymise": {}
+      }
+    ]
+  },
+  "pieces_jointes": [
+    {
+      "nom": "essai-circuit-application.zip",
+      "type": "application",
+      "taille": 1853,
+      "sha256": "afc3a0b50c0792d4c7b54127b6c2b0b751a8dfc07b174b9b5fc8840c6b109755",
+      "sha256_origine": "348bef51a3cd23f904cac79736b462f82b572d3272a67fac01db0080e5c3a7cf",
+      "contenu_b64": "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"
+    }
+  ]
+}
