@@ -244,6 +244,36 @@ def epurer_proposition(p):
 COMPLETABLES = ("usage", "niveau", "langue", "etiquettes", "probleme", "donne", "recoit", "limites", "etapes", "exemple_entree", "exemple_sortie")
 OBLIGATOIRES_DEPOT = ("titre", "resume", "type", "auteur", "contenu")
 CONTROLES_REQUIS = ("aucune-donnee-reelle", "exemples-fictifs", "aucun-nom-adresse", "aucun-appel-reseau")
+# Une application appelle Claude (services de l'artefact) : « seul-appel-claude » remplace « aucun-appel-reseau », qui serait faux.
+CONTROLES_REQUIS_APPLICATION = ("aucune-donnee-reelle", "exemples-fictifs", "aucun-nom-adresse", "seul-appel-claude")
+
+
+def controles_requis(type_projet):
+    return CONTROLES_REQUIS_APPLICATION if type_projet == "application" else CONTROLES_REQUIS
+
+
+def verifier_application(propre, lot):
+    """Contrôles propres au type « application » : Claude seul, capacités déclarées et cohérentes avec le code, un seul .zip."""
+    if propre.get("type") != "application":
+        if propre.get("capacites"):
+            return ["Le champ « capacites » est réservé aux applications."]
+        return []
+    problemes = []
+    if propre.get("ia_compatibles") != ["claude"]:
+        problemes.append("Une application s'installe comme artefact de Claude : « ia_compatibles » doit valoir [claude].")
+    cap = propre.get("capacites")
+    if not isinstance(cap, list) or not cap or any(c not in VOCAB["capacites"] for c in cap) or len(set(cap)) != len(cap):
+        problemes.append("« capacites » doit lister au moins une capacité parmi : %s." % ", ".join(VOCAB["capacites"]))
+        cap = []
+    if "aucun-appel-reseau" in (propre.get("controles") or []):
+        problemes.append("« aucun-appel-reseau » est faux pour une application : elle appelle Claude (engagement « seul-appel-claude »).")
+    if not lot:
+        problemes.append("Une application doit être déposée avec son archive .zip en pièce jointe.")
+    else:
+        for c in lot.get("capacites_detectees", []):
+            if c not in cap:
+                problemes.append("Le code utilise la capacité « %s » mais elle n'est pas déclarée dans « capacites »." % c)
+    return problemes
 
 
 def _vide(v):
@@ -283,6 +313,7 @@ def analyser_pj(d):
     if brut in (None, []):
         return None, []
     import analyse_pj
+    application = d.get("type") == "application"
     erreurs, fichiers, declarees = [], [], []
     if not isinstance(brut, list):
         return None, ["« pieces_jointes » doit être une liste."]
@@ -297,7 +328,7 @@ def analyser_pj(d):
             continue
         fichiers.append((x["nom"], octets))
         declarees.append({"nom": x["nom"], "sha256": x.get("sha256")})
-    lot = analyse_pj.analyser_lot(fichiers, declarees)
+    lot = analyse_pj.analyser_lot(fichiers, declarees, application=application)
     return lot, erreurs
 
 
@@ -345,7 +376,8 @@ def analyser(chemin):
     ia = propre.get("ia_compatibles")
     if not isinstance(ia, list) or not ia or any(x not in VOCAB["ia"] for x in ia):
         problemes.append("« ia_compatibles » doit contenir au moins une IA parmi : %s." % ", ".join(VOCAB["ia"]))
-    manquants = [c for c in CONTROLES_REQUIS if c not in (propre.get("controles") or [])]
+    manquants = [c for c in controles_requis(propre.get("type")) if c not in (propre.get("controles") or [])]
+    problemes += verifier_application(propre, lot)
     if manquants:
         problemes.append("Engagements non cochés : %s." % ", ".join(manquants))
     if "[personne]" in (propre.get("auteur") or ""):
@@ -453,8 +485,9 @@ def finaliser(chemin, chemin_compl, validateur, auteur, notes, sortie):
     ia = propre.get("ia_compatibles")
     if not isinstance(ia, list) or not ia or any(x not in VOCAB["ia"] for x in ia):
         erreurs.append("ia_compatibles invalide.")
-    if any(c not in (propre.get("controles") or []) for c in CONTROLES_REQUIS):
+    if any(c not in (propre.get("controles") or []) for c in controles_requis(propre.get("type"))):
         erreurs.append("Les quatre engagements du dépôt ne sont pas tous cochés.")
+    erreurs += verifier_application(propre, lot)
 
     # Le contenu doit être exactement celui du dépôt, épuré : contrôle de bout en bout.
     attendu, _ = epurer_texte(d.get("contenu"))

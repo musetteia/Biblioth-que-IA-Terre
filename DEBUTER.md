@@ -8,7 +8,7 @@ Cette bibliothèque rassemble des solutions d'IA partagées par des camarades : 
 2. **Comprenez-le.** Ouvrez la fiche. L'onglet *Fonctionnement* montre pas à pas ce que fait le projet, avec un exemple à chaque étape. L'onglet *Fiche* dit ce qu'il ne sait pas faire.
 3. **Installez-le.** L'onglet *Installer* donne la marche à suivre pour votre IA. Testez toujours avec l'exemple fictif fourni avant d'utiliser le projet sur vos propres textes.
 
-## Les quatre types
+## Les cinq types
 
 | Type | Ce que c'est |
 |---|---|
@@ -16,6 +16,7 @@ Cette bibliothèque rassemble des solutions d'IA partagées par des camarades : 
 | Skill | Une compétence packagée, que certains outils savent charger. |
 | Projet | Un ensemble de consignes et de documents de référence pour un espace de travail dédié. |
 | Script | Un petit programme (Python) qui fait un travail précis sur des fichiers. |
+| Application | Une page web avec ses fichiers (jeu, outil), à installer dans votre propre compte Claude : elle s'ouvre comme un artefact et utilise votre forfait. Le site ne l'exécute jamais. |
 
 ## Le statut d'un projet
 

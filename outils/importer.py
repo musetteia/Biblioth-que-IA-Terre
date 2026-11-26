@@ -22,8 +22,23 @@ from rendu import slug
 import valider
 
 FORMAT = "bibliotheque-ia-terre/proposition"
-FICHIER_PRINCIPAL = {"prompt": "prompt.md", "projet": "instructions.md", "skill": "SKILL.md"}
-CONTROLES = ("aucune-donnee-reelle", "exemples-fictifs", "aucun-nom-adresse", "aucun-appel-reseau")
+FICHIER_PRINCIPAL = {"prompt": "prompt.md", "projet": "instructions.md", "skill": "SKILL.md", "application": "utilisation.md"}
+CONTROLES = ("aucune-donnee-reelle", "exemples-fictifs", "aucun-nom-adresse", "aucun-appel-reseau", "seul-appel-claude")
+
+# Message à envoyer dans Claude pour publier l'application comme artefact (capacités déclarées d'après la fiche).
+REGLE_DB = '{"path": "", "read": "admin", "write": "admin"}'
+
+
+def message_installation(capacites):
+    morceaux = []
+    if "db" in capacites:
+        morceaux.append("la base de données (`db`) avec la règle d'accès `%s`" % REGLE_DB)
+    if "sample" in capacites:
+        morceaux.append("l'appel à Claude (`sample`)")
+    declare = (" Déclare ensuite %s pour cet artefact : %s." % (
+        "la capacité" if len(morceaux) == 1 else "les %d capacités" % len(morceaux), " et ".join(morceaux))) if morceaux else ""
+    return ("Publie ces fichiers comme un artefact : `index.html` est la page d'entrée, et les autres fichiers doivent être servis "
+            "à côté, sous les mêmes noms." + declare)
 
 
 # -- petits outils de texte -------------------------------------------------
@@ -86,6 +101,16 @@ def lire_proposition(chemin, vocab):
     ia = donnees.get("ia_compatibles")
     if not isinstance(ia, list) or not ia or any(x not in vocab["ia"] for x in ia):
         problemes.append("Choisissez au moins une IA (valeurs autorisées : %s)." % ", ".join(vocab["ia"]))
+    capacites = donnees.get("capacites")
+    if donnees.get("type") == "application":
+        if ia != ["claude"]:
+            problemes.append("Une application s'installe comme artefact de Claude : « ia_compatibles » doit valoir [claude].")
+        if not isinstance(capacites, list) or not capacites or any(c not in vocab["capacites"] for c in capacites):
+            problemes.append("Indiquez au moins une capacité demandée par l'application (valeurs autorisées : %s)." % ", ".join(vocab["capacites"]))
+        elif len(set(capacites)) != len(capacites):
+            problemes.append("Une capacité est indiquée deux fois.")
+    elif capacites:
+        problemes.append("Le champ « capacites » est réservé aux applications.")
     # Les étapes de fonctionnement sont facultatives. Si elles sont fournies, il en faut au moins deux, complètes.
     etapes = donnees.get("etapes")
     if etapes is None:
@@ -132,6 +157,7 @@ def fiche(d, vocab):
         "type: " + d["type"],
         "usage: " + d["usage"],
         "ia_compatibles: [%s]" % ", ".join(d["ia_compatibles"]),
+    ] + (["capacites: [%s]" % ", ".join(d["capacites"])] if d["type"] == "application" else []) + [
         "langue: " + d["langue"],
         "niveau: " + d["niveau"],
         "statut: " + ("relu" if valide else "propose"),
@@ -191,6 +217,12 @@ def installation(d, vocab, nom_principal, exemple_entree, exemple_sortie):
         commun = ["Créez un espace de travail dédié dans votre outil d'IA (un « projet » ou l'équivalent).",
                   "Copiez le contenu de `%s` dans les consignes de cet espace." % nom_principal,
                   "Ajoutez les documents du dossier `connaissance/`, s'il y en a, comme documents de référence."]
+    elif t == "application":
+        commun = ["Téléchargez l'archive `.zip` de l'application depuis la fiche, puis décompressez-la. Gardez les fichiers ensemble, sous leurs noms d'origine.",
+                  "Ouvrez une conversation dans votre propre compte Claude (un compte qui sait publier des artefacts) et joignez-y tous les fichiers de l'archive.",
+                  "Envoyez ce message : « %s »" % message_installation(d.get("capacites") or []),
+                  "Ouvrez l'artefact créé. La première fois, la page demande l'autorisation d'utiliser Claude : chaque appel compte sur votre forfait Claude, comme un message dans le chat.",
+                  "Utilisez d'abord des données fictives : l'application tourne chez vous, et ses données restent dans votre compte."]
     elif t == "skill":
         commun = ["Récupérez le dossier du projet ; le fichier essentiel est `SKILL.md`.",
                   "Si votre outil sait charger un skill, installez-le. Sinon, copiez le contenu de `SKILL.md` au début d'une conversation."]

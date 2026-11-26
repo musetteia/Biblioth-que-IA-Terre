@@ -14,6 +14,10 @@ Tout le monde peut proposer un projet, sans compte et sans installer quoi que ce
 
 C'est tout : vous n'avez plus rien à faire. Les métadonnées de personnes de vos pièces jointes (auteur, dernier enregistrement) sont remplacées par « [personne] » ; le contenu de vos documents n'est jamais modifié. Les noms, adresses électroniques, numéros de téléphone, clés et mentions de protection sont retirés automatiquement avant l'envoi. Les parties facultatives (problème résolu, étapes, exemples) seront complétées par la personne qui relit. Votre saisie est gardée dans votre navigateur jusqu'à l'envoi : vous pouvez fermer la page et revenir.
 
+## Proposer une application
+
+Une application est une page web avec ses fichiers, qui a besoin de Claude (un jeu, un outil). Choisissez le type « Application », cochez ce qu'elle demande à Claude (appel à Claude, base de données), et déposez en pièce jointe **un seul fichier `.zip`** contenant `index.html` et ses fichiers. Tout doit être dans l'archive : bibliothèques, polices et données ne se chargent pas depuis Internet. Le quatrième engagement devient « la seule connexion est l'appel à Claude ». Le site ne fait pas tourner l'application : chaque utilisateur l'installe dans son propre compte Claude. Dans le champ du contenu, écrivez le mode d'emploi (à quoi ça sert, premiers pas, licences).
+
 ## Ce qui se passe ensuite
 
 1. La proposition arrive par courriel chez les validateurs.

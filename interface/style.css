@@ -18,7 +18,7 @@
   --alerte-fond: #F6E7C6; --alerte-texte: #5A3A00;
   --bleu-fond: #E3EAF7; --bleu-texte: #142D66; --gris-fond: #ECEFF4; --gris-texte: #33405C;
   --code-fond: #14213A; --code-texte: #E6EBF4;
-  --t-prompt: #6B4BB8; --t-skill: #1D5FBF; --t-projet: #0F7B6C; --t-script: #B26A00; --t-doc: #4B5563;
+  --t-prompt: #6B4BB8; --t-skill: #1D5FBF; --t-projet: #0F7B6C; --t-script: #B26A00; --t-application: #A62F6B; --t-doc: #4B5563;
   --tech: 29, 63, 143; --tech-a: .07;
   --bleu: var(--accent); --attenue: var(--discret);
   --rayon: 12px;
@@ -26,8 +26,8 @@
   --police-mono: "Plex Mono", "IBM Plex Mono", ui-monospace, Consolas, Menlo, monospace;
   color-scheme: light;
 }
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --fond: #0F1522; --surface: #161E2E; --encre: #E6EBF4; --encre-douce: #C2CBDC; --discret: #9AA6BD; --trait: #2A3550; --trait-doux: #1F2940; --trait-fort: #45537A; --accent: #9DB8EC; --accent-fort: #C9D8F5; --accent-doux: #1C2945; --bande: #18223A; --rouge: #FF6B5E; --vert: #3CC2AD; --vert-doux: #14302C; --ambre: #F0A838; --bouton: #2C56B8; --bouton-texte: #FFFFFF; --sur-pastille: #0F1522; --alerte-fond: #4A3D14; --alerte-texte: #F6E7C6; --bleu-fond: #1C2945; --bleu-texte: #C9D8F5; --gris-fond: #1F2940; --gris-texte: #C2CBDC; --code-fond: #0B1020; --code-texte: #E6EBF4; --t-prompt: #A98CF0; --t-skill: #5B9BFF; --t-projet: #3CC2AD; --t-script: #F0A838; --t-doc: #A3ACBA; --tech: 157, 184, 236; --tech-a: .06; color-scheme: dark; } }
-:root[data-theme="dark"] { --fond: #0F1522; --surface: #161E2E; --encre: #E6EBF4; --encre-douce: #C2CBDC; --discret: #9AA6BD; --trait: #2A3550; --trait-doux: #1F2940; --trait-fort: #45537A; --accent: #9DB8EC; --accent-fort: #C9D8F5; --accent-doux: #1C2945; --bande: #18223A; --rouge: #FF6B5E; --vert: #3CC2AD; --vert-doux: #14302C; --ambre: #F0A838; --bouton: #2C56B8; --bouton-texte: #FFFFFF; --sur-pastille: #0F1522; --alerte-fond: #4A3D14; --alerte-texte: #F6E7C6; --bleu-fond: #1C2945; --bleu-texte: #C9D8F5; --gris-fond: #1F2940; --gris-texte: #C2CBDC; --code-fond: #0B1020; --code-texte: #E6EBF4; --t-prompt: #A98CF0; --t-skill: #5B9BFF; --t-projet: #3CC2AD; --t-script: #F0A838; --t-doc: #A3ACBA; --tech: 157, 184, 236; --tech-a: .06; color-scheme: dark; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --fond: #0F1522; --surface: #161E2E; --encre: #E6EBF4; --encre-douce: #C2CBDC; --discret: #9AA6BD; --trait: #2A3550; --trait-doux: #1F2940; --trait-fort: #45537A; --accent: #9DB8EC; --accent-fort: #C9D8F5; --accent-doux: #1C2945; --bande: #18223A; --rouge: #FF6B5E; --vert: #3CC2AD; --vert-doux: #14302C; --ambre: #F0A838; --bouton: #2C56B8; --bouton-texte: #FFFFFF; --sur-pastille: #0F1522; --alerte-fond: #4A3D14; --alerte-texte: #F6E7C6; --bleu-fond: #1C2945; --bleu-texte: #C9D8F5; --gris-fond: #1F2940; --gris-texte: #C2CBDC; --code-fond: #0B1020; --code-texte: #E6EBF4; --t-prompt: #A98CF0; --t-skill: #5B9BFF; --t-projet: #3CC2AD; --t-script: #F0A838; --t-application: #F07AB0; --t-doc: #A3ACBA; --tech: 157, 184, 236; --tech-a: .06; color-scheme: dark; } }
+:root[data-theme="dark"] { --fond: #0F1522; --surface: #161E2E; --encre: #E6EBF4; --encre-douce: #C2CBDC; --discret: #9AA6BD; --trait: #2A3550; --trait-doux: #1F2940; --trait-fort: #45537A; --accent: #9DB8EC; --accent-fort: #C9D8F5; --accent-doux: #1C2945; --bande: #18223A; --rouge: #FF6B5E; --vert: #3CC2AD; --vert-doux: #14302C; --ambre: #F0A838; --bouton: #2C56B8; --bouton-texte: #FFFFFF; --sur-pastille: #0F1522; --alerte-fond: #4A3D14; --alerte-texte: #F6E7C6; --bleu-fond: #1C2945; --bleu-texte: #C9D8F5; --gris-fond: #1F2940; --gris-texte: #C2CBDC; --code-fond: #0B1020; --code-texte: #E6EBF4; --t-prompt: #A98CF0; --t-skill: #5B9BFF; --t-projet: #3CC2AD; --t-script: #F0A838; --t-application: #F07AB0; --t-doc: #A3ACBA; --tech: 157, 184, 236; --tech-a: .06; color-scheme: dark; }
 
 *, *::before, *::after { box-sizing: border-box; }
 [hidden] { display: none !important; }

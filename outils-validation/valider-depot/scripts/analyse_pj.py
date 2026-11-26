@@ -22,6 +22,7 @@ Le contenu d'un document n'est jamais modifié : la mise en forme est ce qui com
 """
 import hashlib
 import html
+import json
 import io
 import re
 import unicodedata
@@ -486,9 +487,12 @@ def _texte_visible_html(texte):
     return html.unescape(sans)
 
 
-def _analyser_html(octets, res):
+def _analyser_html(octets, res, application=False):
     """Page HTML : refuse tout ce qui charge, envoie ou évalue ; anonymise les métadonnées de personnes ;
-    signale le reste. Renvoie les octets finaux (identiques à l'original si rien n'a été anonymisé)."""
+    signale le reste. Renvoie les octets finaux (identiques à l'original si rien n'a été anonymisé).
+    application=True : page d'une application livrée dans un .zip avec ses fichiers voisins : fetch, XMLHttpRequest, Worker
+    et importScripts passent de « refusé » à « à relire », les fichiers voisins en chemin relatif sont permis,
+    mais toute adresse distante dans le code reste refusée."""
     if b"\x00" in octets:
         res["refus"].append("le fichier contient des octets nuls : ce n'est pas une page HTML.")
         return octets
@@ -509,14 +513,17 @@ def _analyser_html(octets, res):
                             "une page déposée doit fonctionner hors ligne, avec tout ce dont elle a besoin dans le fichier.")
     blocs = [m.group(2) for m in HTML_BLOCS.finditer(texte)]
     code = "\n".join(blocs)
-    for motif, libelle in HTML_REFUS_CODE:
+    regles_refus = HTML_REFUS_CODE_APP if application else HTML_REFUS_CODE
+    if application:
+        _analyser_code_application(code, "le code de la page", res, entete_permis=False)
+    for motif, libelle in regles_refus:
         if motif.search(code):
             res["refus"].append("le code de la page contient : %s. Une page déposée ne doit contacter aucun serveur ni évaluer de texte comme du code." % libelle)
     # scripts inline dans les attributs (onclick="fetch(...)") : on cherche aussi dans l'ensemble de la page
-    for motif, libelle in HTML_REFUS_CODE:
+    for motif, libelle in regles_refus:
         if motif.search(texte) and not motif.search(code):
             res["refus"].append("la page contient : %s (dans un attribut de balise). Une page déposée ne doit contacter aucun serveur ni évaluer de texte comme du code." % libelle)
-    if HTML_SCRIPT_RELATIF.search(texte):
+    if HTML_SCRIPT_RELATIF.search(texte) and not application:
         res["alertes"].append("la page référence un fichier voisin (script ou feuille de style en chemin relatif) : il ne sera pas fourni. Tout doit être dans le fichier.")
     liens = HTML_DISTANT_A.findall(texte)
     if liens:
@@ -559,6 +566,225 @@ def _analyser_html(octets, res):
         res["anonymises"]["metadonnees_html"] = compte
         return nouveau.encode("utf-8")
     return octets
+
+
+# -- analyse d'une application (archive .zip) ---------------------------------------------------------------------
+# Une « application » est une page HTML accompagnée de ses fichiers (scripts, moteur .wasm, données .json, styles, images).
+# Elle s'installe chez chaque utilisateur, dans son propre Claude (artefact) ; le site ne l'héberge ni ne l'exécute jamais.
+# Règles : liste fermée d'extensions, aucune adresse distante dans le code ni dans les ressources, aucune évaluation de texte
+# comme du code, aucune connexion réseau directe (WebSocket…). fetch, XMLHttpRequest, Worker et importScripts sont signalés
+# au validateur (une application charge ses propres fichiers) : leur cible réelle ne peut pas être prouvée par une analyse de texte.
+# Limite connue : un script obscurci (adresse reconstituée à l'exécution) échappe à toute analyse de texte. La relecture du validateur
+# est le vrai filet de sécurité, et la fiche publiée le dit.
+APP_MAX_FICHIERS = 200
+APP_MAX_FICHIER = 30 * 1024 * 1024
+APP_MAX_TOTAL = 60 * 1024 * 1024
+APP_PROFONDEUR = 4
+APP_EXT = {
+    ".html": "html", ".htm": "html", ".js": "js", ".mjs": "js", ".wasm": "wasm", ".json": "json", ".css": "css",
+    ".md": "texte", ".txt": "texte",
+    ".png": "image", ".jpg": "image", ".jpeg": "image", ".gif": "image", ".webp": "image", ".ico": "image",
+    ".woff": "police", ".woff2": "police", ".ttf": "police", ".otf": "police",
+}
+APP_SIGNATURES = {
+    ".wasm": [b"\x00asm\x01\x00\x00\x00"], ".png": [b"\x89PNG\r\n\x1a\n"], ".jpg": [b"\xff\xd8\xff"], ".jpeg": [b"\xff\xd8\xff"],
+    ".gif": [b"GIF87a", b"GIF89a"], ".webp": [b"RIFF"], ".ico": [b"\x00\x00\x01\x00"],
+    ".woff": [b"wOFF"], ".woff2": [b"wOF2"], ".ttf": [b"\x00\x01\x00\x00", b"true"], ".otf": [b"OTTO"],
+}
+APP_IGNORES = re.compile(r"(?:^|/)(?:__MACOSX/|\.DS_Store$|Thumbs\.db$|desktop\.ini$)", re.I)
+APP_EXECUTABLE = re.compile(r"\.(exe|dll|bat|cmd|ps1|vbs|jar|scr|com|msi|lnk|hta|sh|py|so|dylib|node)$", re.I)
+
+# Refus communs à une page et à un script d'application.
+HTML_REFUS_CODE_APP = [(m, l) for (m, l) in HTML_REFUS_CODE if not l.startswith(("appel réseau fetch", "appel réseau XMLHttpRequest", "chargement de script distant", "Worker ou service worker"))]
+HTML_REFUS_CODE_APP.append((re.compile(r"\bserviceWorker\b|\bnew\s+SharedWorker\s*\("), "service worker ou worker partagé"))
+APP_ALERTE_CODE = [
+    (re.compile(r"\bfetch\s*\("), "appel fetch() : le validateur doit vérifier que la cible est un fichier de l'archive"),
+    (re.compile(r"XMLHttpRequest"), "appel XMLHttpRequest : le validateur doit vérifier que la cible est un fichier de l'archive"),
+    (re.compile(r"\bnew\s+Worker\s*\("), "création d'un Worker : le validateur doit vérifier le script chargé"),
+    (re.compile(r"\bimportScripts\s*\("), "importScripts : le validateur doit vérifier le script chargé"),
+    (re.compile(r"\bwindow\s*\.\s*open\s*\(|\blocation\s*(?:\.\s*(?:href|assign|replace)\s*[=(]|=(?!=))"), "ouverture ou changement d'adresse de page (window.open, location)"),
+    (re.compile(r"(?<![\w.$])atob\s*\(|String\s*\.\s*fromCharCode\s*\("), "décodage de texte encodé (atob, fromCharCode) : à relire"),
+    (re.compile(r"document\s*\.\s*cookie"), "lecture ou écriture de cookies"),
+]
+APP_URL_CODE = re.compile(r"""https?://|(?<![\w:])["'`]\s*//[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+""", re.I)
+APP_CAPACITE = re.compile(r"""\buse\s*\(\s*["']([A-Za-z_]+)["']\s*\)""")
+CAPACITES_CONNUES = ("sample", "db")
+
+
+def _sans_entete_js(texte):
+    """Retire le ou les commentaires /* … */ placés tout au début d'un fichier (licence, origine). Rien d'autre :
+    un commentaire plus loin pourrait cacher du code, donc il est analysé comme le reste."""
+    t = texte.lstrip("﻿")
+    while True:
+        m = re.match(r"\s*(?:/\*.*?\*/|//[^\n]*\n)", t, re.S)
+        if not m:
+            return t
+        t = t[m.end():]
+
+
+def _analyser_code_application(code, source, res, entete_permis=True):
+    """Code JavaScript d'une application (script ou bloc d'une page) : adresses distantes, API réseau, évaluation de texte."""
+    a_scanner = _sans_entete_js(code) if entete_permis else code
+    for motif, libelle in HTML_REFUS_CODE_APP:
+        if motif.search(a_scanner):
+            res["refus"].append("%s contient : %s. Une application ne doit contacter aucun serveur ni évaluer de texte comme du code." % (source, libelle))
+    m = APP_URL_CODE.search(a_scanner)
+    if m:
+        ligne = a_scanner.count("\n", 0, m.start()) + 1
+        res["refus"].append("%s contient une adresse distante (ligne %d) : une application doit fonctionner avec les seuls fichiers de l'archive "
+                            "(bibliothèques, polices et données embarquées, pas de CDN)." % (source, ligne))
+    for motif, libelle in APP_ALERTE_CODE:
+        if motif.search(a_scanner):
+            res["alertes"].append("%s contient : %s." % (source, libelle))
+    _, c = _vd().epurer_texte(a_scanner)
+    if c["cle"]:
+        res["refus"].append("clé, jeton ou mot de passe apparent dans %s (%d) : l'auteur doit le révoquer." % (source, c["cle"]))
+    res["alertes"] += repere_consignes(a_scanner, source)
+    res.setdefault("capacites_detectees", set()).update(x for x in APP_CAPACITE.findall(a_scanner) if x in CAPACITES_CONNUES)
+
+
+def _analyser_fichier_application(nom, ext, octets, res):
+    """Analyse d'un fichier de l'archive. Renvoie les octets finaux (modifiés seulement si des métadonnées de personne sont anonymisées)."""
+    genre = APP_EXT[ext]
+    sous = {"refus": [], "alertes": [], "anonymises": {}}
+    final = octets
+    if ext in APP_SIGNATURES and not any(octets.startswith(sig) for sig in APP_SIGNATURES[ext]):
+        sous["refus"].append("le contenu réel ne correspond pas à l'extension %s." % ext)
+    elif ext == ".webp" and octets[8:12] != b"WEBP":
+        sous["refus"].append("le contenu réel ne correspond pas à l'extension .webp.")
+    elif genre == "html":
+        final = _analyser_html(octets, sous, application=True)
+    elif genre in ("js", "json", "css", "texte"):
+        try:
+            texte = octets.decode("utf-8-sig")
+        except UnicodeDecodeError:
+            sous["refus"].append("encodage non reconnu : le fichier doit être enregistré en UTF-8.")
+            texte = None
+        if texte is not None and b"\x00" in octets:
+            sous["refus"].append("le fichier contient des octets nuls : ce n'est pas un fichier texte.")
+        elif texte is not None:
+            if genre == "js":
+                _analyser_code_application(texte, "le script", sous)
+            elif genre == "json":
+                try:
+                    json.loads(texte)
+                except ValueError:
+                    sous["refus"].append("le fichier n'est pas un JSON valide.")
+                _, c = _vd().epurer_texte(texte)
+                if c["cle"]:
+                    sous["refus"].append("clé, jeton ou mot de passe apparent dans le fichier (%d) : l'auteur doit le révoquer." % c["cle"])
+                if c["marquage"]:
+                    sous["refus"].append("mention de protection dans le fichier : la bibliothèque est « NON PROTÉGÉ ».")
+                for k, lib in (("courriel", "adresse(s) de messagerie"), ("telephone", "numéro(s) de téléphone"), ("ip", "adresse(s) IP")):
+                    if c[k]:
+                        sous["alertes"].append("le fichier comprend %d %s." % (c[k], lib))
+                if re.search(r"https?://", texte):
+                    sous["alertes"].append("le fichier contient des adresses web : elles ne sont pas chargées seules, mais le validateur doit les relire.")
+            elif genre == "css":
+                if re.search(r"@import\b|url\(\s*[\"']?\s*(?:https?:)?//", texte, re.I):
+                    sous["refus"].append("la feuille de style charge une ressource distante (« @import » ou « url(http… ») : tout doit être dans l'archive.")
+            else:
+                _controles_contenu(texte, sous)
+    elif genre == "wasm":
+        sous["alertes"].append("binaire WebAssembly : il ne peut pas être relu. Son origine (projet, version, licence) doit être vérifiée par le validateur.")
+    res["refus"] += ["« %s » : %s" % (nom, x) for x in sous["refus"]]
+    res["alertes"] += ["« %s » : %s" % (nom, x) for x in sous["alertes"]]
+    for k, v in sous["anonymises"].items():
+        res["anonymises"][k] = res["anonymises"].get(k, 0) + v
+    if "capacites_detectees" in sous:
+        res.setdefault("capacites_detectees", set()).update(sous["capacites_detectees"])
+    return final
+
+
+def _zip_canonique(entrees):
+    """Archive reconstruite de façon déterministe (noms triés, dates fixes) : l'analyse d'une archive canonique la rend identique."""
+    sortie = io.BytesIO()
+    with zipfile.ZipFile(sortie, "w", zipfile.ZIP_DEFLATED) as z:
+        for nom in sorted(entrees):
+            info = zipfile.ZipInfo(nom, date_time=(2026, 1, 1, 0, 0, 0))
+            info.compress_type = zipfile.ZIP_DEFLATED
+            info.external_attr = 0o644 << 16
+            z.writestr(info, entrees[nom])
+    return sortie.getvalue()
+
+
+def _analyser_application(octets, res):
+    """Archive .zip d'une application. Renvoie les octets finaux (archive canonique)."""
+    try:
+        zf = zipfile.ZipFile(io.BytesIO(octets))
+    except zipfile.BadZipFile:
+        res["refus"].append("archive .zip illisible ou abîmée.")
+        return octets
+    infos = [i for i in zf.infolist() if not i.is_dir()]
+    ignores = [i for i in infos if APP_IGNORES.search(i.filename)]
+    infos = [i for i in infos if i not in ignores]
+    if ignores:
+        res["alertes"].append("%d fichier(s) de système retiré(s) de l'archive (__MACOSX, .DS_Store…)." % len(ignores))
+    if not infos:
+        res["refus"].append("l'archive ne contient aucun fichier.")
+        return octets
+    if len(infos) > APP_MAX_FICHIERS:
+        res["refus"].append("trop de fichiers dans l'archive : %d (maximum %d)." % (len(infos), APP_MAX_FICHIERS))
+        return octets
+    total_decl = sum(i.file_size for i in infos)
+    if total_decl > APP_MAX_TOTAL or any(i.file_size > APP_MAX_FICHIER for i in infos):
+        res["refus"].append("archive démesurée une fois décompressée (maximum %d Mo en tout, %d Mo par fichier)." % (APP_MAX_TOTAL // 1048576, APP_MAX_FICHIER // 1048576))
+        return octets
+    if total_decl > 10 * 1048576 and total_decl > RATIO_MAX * max(1, len(octets)):
+        res["refus"].append("rapport de compression suspect (archive piégée ?).")
+        return octets
+    noms = []
+    for i in infos:
+        n = i.filename
+        if i.flag_bits & 0x1:
+            res["refus"].append("« %s » : fichier chiffré ou protégé par mot de passe." % n[:80])
+        if (i.external_attr >> 16) & 0o170000 == 0o120000:
+            res["refus"].append("« %s » : lien symbolique." % n[:80])
+        if (n.startswith(("/", "\\")) or "\\" in n or ":" in n or re.search(r"(?:^|/)\.\.?(?:/|$)", n) or any(ord(c) < 32 for c in n)):
+            res["refus"].append("« %s » : nom ou chemin non autorisé (chemin absolu, « .. », caractère spécial)." % n[:80])
+        noms.append(n)
+    if res["refus"]:
+        return octets
+    # racine : soit les fichiers sont à la racine, soit tous dans un seul dossier
+    premiers = {n.split("/")[0] for n in noms}
+    prefixe = ""
+    if len(premiers) == 1 and all("/" in n for n in noms):
+        prefixe = next(iter(premiers)) + "/"
+    relatifs = {i: i.filename[len(prefixe):] for i in infos}
+    if "index.html" not in relatifs.values():
+        res["refus"].append("l'archive doit contenir « index.html » à sa racine (la page d'entrée de l'application).")
+        return octets
+    vus = set()
+    entrees, capacites = {}, set()
+    for i in infos:
+        rel = relatifs[i]
+        bas = rel.lower()
+        if bas in vus:
+            res["refus"].append("« %s » : nom en double dans l'archive." % rel[:80])
+            continue
+        vus.add(bas)
+        if rel.count("/") >= APP_PROFONDEUR:
+            res["refus"].append("« %s » : dossiers trop imbriqués." % rel[:80])
+            continue
+        ext = ("." + rel.rsplit(".", 1)[-1].lower()) if "." in rel.rsplit("/", 1)[-1] else ""
+        if APP_EXECUTABLE.search(rel) or ext in (".zip", ".rar", ".7z", ".gz", ".tar", ".svg", ".doc", ".xls", ".ppt") or ext not in APP_EXT:
+            res["refus"].append("« %s » : type de fichier non accepté dans une application (acceptés : %s)." % (rel[:80], ", ".join(sorted(APP_EXT))))
+            continue
+        try:
+            donnees = _lire_borne(zf, i, APP_MAX_FICHIER)
+        except (ValueError, RuntimeError, zipfile.BadZipFile) as e:
+            res["refus"].append("« %s » : %s." % (rel[:80], e))
+            continue
+        if not donnees:
+            res["refus"].append("« %s » : fichier vide." % rel[:80])
+            continue
+        entrees[rel] = _analyser_fichier_application(rel, ext, donnees, res)
+    capacites = set(res.get("capacites_detectees", set()))
+    res["capacites_detectees"] = sorted(capacites)
+    res["fichiers_archive"] = sorted(entrees)
+    if res["refus"]:
+        return octets
+    return _zip_canonique(entrees)
 
 
 # -- analyse d'un PDF -----------------------------------------------------------------------------------------
@@ -842,7 +1068,7 @@ def _remplacer_xmp(octets):
 
 
 # -- point d'entrée par fichier -------------------------------------------------------------------------------
-def analyser_fichier(nom_origine, octets):
+def analyser_fichier(nom_origine, octets, application=False):
     nom = nom_sur(nom_origine)
     ext = ("." + nom.rsplit(".", 1)[-1].lower()) if "." in nom else ""
     res = {"nom_origine": str(nom_origine), "nom": nom, "extension": ext, "type": None, "taille_origine": len(octets),
@@ -854,6 +1080,22 @@ def analyser_fichier(nom_origine, octets):
                             % (EXT_ANCIENNES[ext], ext, {"Word": ".docx", "Excel": ".xlsx", "PowerPoint": ".pptx"}[EXT_ANCIENNES[ext]]))
     elif ext in EXT_MACROS:
         res["refus"].append("format à macros (%s) : refusé. Enregistrer sans macros (%s)." % (ext, ext[:-1] + "x"))
+    elif application and ext == ".zip":
+        res["type"] = "application"
+        if not octets:
+            res["refus"].append("fichier vide.")
+        elif octets[:4] != b"PK\x03\x04":
+            res["refus"].append("le contenu réel ne correspond pas à l'extension .zip.")
+        else:
+            try:
+                final = _analyser_application(octets, res)
+            except (ValueError, RuntimeError, MemoryError, zipfile.BadZipFile, OSError) as e:
+                res["refus"].append("analyse impossible : %s." % e)
+                final = octets
+            if not res["refus"]:
+                res["octets"] = final
+    elif application:
+        res["refus"].append("une application se dépose dans un seul fichier .zip (reçu : %s)." % (ext or "sans extension"))
     elif ext not in EXT_ACCEPTEES:
         res["refus"].append("type de fichier non accepté (%s). Acceptés : .docx, .xlsx, .pptx, .pdf, .html." % (ext or "sans extension"))
     elif not octets:
@@ -884,10 +1126,12 @@ def analyser_fichier(nom_origine, octets):
     return res
 
 
-def analyser_lot(fichiers, declarees=None):
+def analyser_lot(fichiers, declarees=None, application=False):
     """fichiers : liste de (nom, octets). declarees : liste de {nom, taille, sha256} annoncée par le dépôt (facultatif).
     Renvoie {"refus": [...], "alertes": [...], "fichiers": [...], "taille_totale": n}."""
     lot = {"refus": [], "alertes": [], "fichiers": [], "taille_totale": 0}
+    if application and len(fichiers) != 1:
+        lot["refus"].append("une application se dépose dans exactement une pièce jointe (un fichier .zip) : %d reçue(s)." % len(fichiers))
     if len(fichiers) > MAX_FICHIERS:
         lot["refus"].append("trop de pièces jointes : %d (maximum %d)." % (len(fichiers), MAX_FICHIERS))
     total = sum(len(o) for _, o in fichiers)
@@ -896,7 +1140,7 @@ def analyser_lot(fichiers, declarees=None):
         lot["refus"].append("pièces jointes trop lourdes : %.1f Mo (maximum %d Mo par dépôt)." % (total / 1048576, MAX_TOTAL // 1048576))
     utilises = set()
     for nom, octets in fichiers[:MAX_FICHIERS]:
-        r = analyser_fichier(nom, octets)
+        r = analyser_fichier(nom, octets, application=application)
         base, point, ext = r["nom"].rpartition(".")
         n = 2
         while r["nom"].lower() in utilises:
@@ -919,6 +1163,7 @@ def analyser_lot(fichiers, declarees=None):
         for h, r in reçus.items():
             if h not in annoncees:
                 lot["alertes"].append("« %s » : pièce jointe non annoncée par le dépôt." % r["nom"])
+    lot["capacites_detectees"] = sorted({c for r in lot["fichiers"] for c in r.get("capacites_detectees", [])})
     return lot
 
 
@@ -927,6 +1172,10 @@ def controles_acceptes(type_):
             "aucun mot de passe, aucune mention de protection"]
     if type_ == "pdf":
         return base + ["aucun JavaScript, aucun lancement de programme"]
+    if type_ == "application":
+        return ["archive saine (aucun chemin piégé, aucune bombe, extensions autorisées uniquement)", "aucune adresse distante dans le code ni dans les ressources",
+                "aucune évaluation de texte comme du code, aucune connexion réseau directe", "aucun mot de passe, aucune mention de protection",
+                "métadonnées de personnes anonymisées"]
     if type_ == "html":
         return ["type réel conforme à l'extension", "aucun appel réseau, aucune ressource distante, aucun cadre intégré",
                 "aucune évaluation de texte comme du code", "aucun mot de passe, aucune mention de protection",
