@@ -541,7 +541,12 @@ def finaliser(chemin, chemin_compl, validateur, auteur, notes, sortie):
         for f in lot["fichiers"]:
             anon = ", ".join("%d × %s" % (v, k) for k, v in f["anonymises"].items())
             lignes.append("- %s (%s, %.0f Ko, SHA-256 %s…)%s" % (f["nom"], f["type"], f["taille"] / 1024, f["sha256"][:12], (" — métadonnées anonymisées : " + anon) if anon else ""))
-        lignes.append("- Contrôles passés : aucune macro ni objet actif, aucun lien dangereux, aucun mot de passe ni mention de protection.")
+        if propre.get("type") == "application":
+            import analyse_pj
+            lignes.append("- Contrôles passés (application) : " + " ; ".join(analyse_pj.controles_acceptes("application")) + ".")
+            lignes.append("- Capacités déclarées : " + ", ".join(propre.get("capacites") or []) + ". Le validateur a relu les alertes (fetch, Worker, binaire .wasm) avant de valider.")
+        else:
+            lignes.append("- Contrôles passés : aucune macro ni objet actif, aucun lien dangereux, aucun mot de passe ni mention de protection.")
     lignes += ["", "## Contenu", "- Repris à l'identique du dépôt (empreinte SHA-256 : %s…)." % sha(propre["contenu"])[:16], ""]
     if alertes:
         lignes.append("## À vérifier avant publication")

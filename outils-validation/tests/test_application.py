@@ -192,6 +192,19 @@ with tempfile.TemporaryDirectory() as tmp:
     verifier("archive piégée : finaliser refuse", r.returncode == 1 and "eval" in r.stdout, r.stdout)
     verifier("archive piégée : aucun fichier produit", not os.path.exists(os.path.join(tmp, "z")))
 
+print("Archive canonique : indépendante de la compression (zlib varie selon la machine)")
+def zip_niveau(niveau):
+    sortie = io.BytesIO()
+    with zipfile.ZipFile(sortie, "w", zipfile.ZIP_DEFLATED, compresslevel=niveau) as z:
+        for nom, contenu in SAIN.items():
+            z.writestr(nom, contenu)
+    return sortie.getvalue()
+bruts = [zip_niveau(1), zip_niveau(9), fabriquer_zip(SAIN)]
+verifier("les compressions donnent des octets bruts différents", len({hashlib.sha256(b).hexdigest() for b in bruts}) > 1)
+canos = [analyser(b)["octets"] for b in bruts]
+verifier("même archive canonique quelle que soit la compression", len({hashlib.sha256(c).hexdigest() for c in canos}) == 1)
+verifier("l'archive canonique est un point fixe", analyser(canos[0])["octets"] == canos[0])
+
 print("Application réelle fournie (échecs contre Claude)")
 reel = "/mnt/user-data/uploads/eba9d5ce-echecs-contre-claude.zip"
 if os.path.exists(reel):
