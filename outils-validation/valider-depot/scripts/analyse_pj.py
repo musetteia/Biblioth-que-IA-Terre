@@ -697,12 +697,14 @@ def _analyser_fichier_application(nom, ext, octets, res):
 
 
 def _zip_canonique(entrees):
-    """Archive reconstruite de façon déterministe (noms triés, dates fixes) : l'analyse d'une archive canonique la rend identique."""
+    """Archive reconstruite de façon déterministe (noms triés, dates fixes, SANS compression) : l'analyse d'une archive canonique la rend identique.
+    Pas de compression : la sortie de zlib varie selon la version et l'implémentation (zlib, zlib-ng), ce qui ferait croire
+    au robot, sur une autre machine, que l'archive a été modifiée."""
     sortie = io.BytesIO()
-    with zipfile.ZipFile(sortie, "w", zipfile.ZIP_DEFLATED) as z:
+    with zipfile.ZipFile(sortie, "w", zipfile.ZIP_STORED) as z:
         for nom in sorted(entrees):
             info = zipfile.ZipInfo(nom, date_time=(2026, 1, 1, 0, 0, 0))
-            info.compress_type = zipfile.ZIP_DEFLATED
+            info.compress_type = zipfile.ZIP_STORED
             info.external_attr = 0o644 << 16
             z.writestr(info, entrees[nom])
     return sortie.getvalue()
