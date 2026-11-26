@@ -138,7 +138,9 @@
       el('div', { classe: 'champ' }, [el('span', { classe: 'champ-titre', id: 'pj-titre' }, [el('span', { texte: 'Pièces jointes' }), el('span', { classe: 'facultatif', texte: ' (facultatif)' })]),
         el('p', { classe: 'champ-aide', texte: 'Un document lié à votre projet (modèle, fiche, tableau…). Ces fichiers ne sont pas gardés dans le brouillon : si vous rechargez la page, ajoutez-les de nouveau.' }), depotPj, retourPj, listePj])
     ]),
-    section('3. Vos engagements (obligatoire)', 'Vous certifiez avoir vérifié ces quatre points. Ils s\'affichent sur la fiche.', [attestations]),
+    section('3. Vos engagements (obligatoire)', 'Vous certifiez avoir vérifié ces quatre points. Ils s\'affichent sur la fiche.', [
+      el('label', { classe: 'case case-guide', id: 'case-guide' }, [el('input', { type: 'checkbox', name: 'guide', value: 'oui' }), el('span', { texte: 'J\'ai fait passer mon projet par le guide de mise aux normes (encadré vert en haut de la page), ou je l\'ai relu en entier avec les règles de publication.' })]),
+      attestations]),
     section('4. Pour compléter la fiche (facultatif)', 'Vous pouvez tout laisser vide. Ce que vous renseignez ici sera repris tel quel ; le reste sera proposé par la personne qui relit.', [
       el('div', { classe: 'ligne-deux' }, [
         champ('usage', 'Usage principal', '', liste(V.usage, '— à compléter par la relecture —')),
@@ -311,6 +313,7 @@
       if (!e.titre || !e.entree || !e.sortie) { p.push({ id: null, texte: 'Étape ' + e.n + ' : le titre, l\'entrée et la sortie sont à remplir (ou videz entièrement l\'étape pour l\'ignorer).' }); }
     });
     if (s.etapes.length === 1) { p.push({ id: null, texte: 'Une seule étape est remplie : il en faut au moins deux pour le schéma. Ajoutez-en une, ou videz celle-ci pour passer cette partie.' }); }
+    if (!formulaire.querySelector('input[name=guide]').checked) { p.push({ id: 'case-guide', texte: 'Passez d\'abord votre projet par le guide de mise aux normes (encadré vert en haut de la page), puis cochez la case de la partie 3.' }); }
     if (s.controles.length < 4) { p.push({ id: null, texte: 'Les quatre engagements doivent être cochés.' }); }
     if (s.type !== 'application' && PJ.some(function (x) { return extension(x.nom) === 'zip'; })) { p.push({ id: 'pj-titre', texte: 'Une archive .zip ne se dépose que pour une application : retirez-la ou choisissez le type « Application ».' }); }
     if (s.type === 'application') {

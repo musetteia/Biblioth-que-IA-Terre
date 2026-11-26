@@ -66,6 +66,26 @@ try:
         verifier("zone 1 : SKILL.md chargé dans le contenu", True)
         for c in page.locator("input[name=controles]:visible").all(): c.check()
 
+        print("Guide de mise aux normes : en haut du formulaire, téléchargeable, case obligatoire")
+        verifier("encart du guide visible avant le formulaire", page.locator(".encart-guide").is_visible()
+                 and page.evaluate("document.querySelector('.encart-guide').compareDocumentPosition(document.querySelector('#formulaire')) & Node.DOCUMENT_POSITION_FOLLOWING") > 0)
+        verifier("encart dans la fenêtre dès l'ouverture (sans défiler)", page.evaluate("document.querySelector('.bouton-guide').getBoundingClientRect().bottom") < 900)
+        tel = nav.new_page(viewport={"width": 390, "height": 844}); tel.goto("http://127.0.0.1:%d/pages/proposer.html" % PORT_SITE); tel.wait_for_selector("#titre")
+        verifier("téléphone : bouton de téléchargement visible sans défiler (au-dessus de la barre du bas)", tel.evaluate("document.querySelector('.bouton-guide').getBoundingClientRect().bottom") < 844 - 80)
+        verifier("le texte du second bouton est lisible (couleur différente du fond)", tel.evaluate("(()=>{const b=document.querySelector('.encart-guide .bouton.secondaire');const c=getComputedStyle(b);return c.color!==c.backgroundColor})()"))
+        tel.close()
+        for lien, mot in (("guide-mise-aux-normes.md", "preparer-depot"), ("preparer-depot.zip", None)):
+            rep = urllib.request.urlopen("http://127.0.0.1:%d/telechargements/%s" % (PORT_SITE, lien))
+            octets = rep.read()
+            verifier("téléchargement du guide : " + lien, rep.status == 200 and len(octets) > 5000 and (mot is None or mot.encode() in octets[:200]))
+        zg = zipfile.ZipFile(io.BytesIO(urllib.request.urlopen("http://127.0.0.1:%d/telechargements/preparer-depot.zip" % PORT_SITE).read()))
+        verifier("le .zip est un skill (SKILL.md avec en-tête)", zg.namelist() == ["preparer-depot/SKILL.md"] and zg.read("preparer-depot/SKILL.md").startswith(b"---\nname: preparer-depot"))
+        page.click("button[type=submit]")
+        page.wait_for_timeout(500)
+        verifier("sans la case du guide : l'envoi est refusé avec un message clair",
+                 "guide de mise aux normes" in page.inner_text(".formulaire").lower() or "guide de mise aux normes" in page.inner_text("body").lower())
+        page.check("input[name=guide]")
+
         print("Pièces jointes : refus immédiats dans le navigateur")
         for nom, chemin, mot in [("macro .docm", f_docm, "macros"), ("vieux .doc", f_doc, "ancien format"), (".exe", f_exe, "non accepté"), ("pdf JavaScript", f_js, "actif"), ("docx piégé", f_piege, "macros"), ("16 Mo", f_gros, "15 Mo"), ("html avec fetch", f_html_fetch, "fetch"), ("html avec ressource distante", f_html_dist, "distante"), ("faux html", f_html_faux, "pas une page")]:
             page.set_input_files("#fichier-pj", chemin)
@@ -150,6 +170,7 @@ try:
         verifier("Claude seul : coché, les autres IA désactivées",
                  p2.locator("input[name=ia][value=claude]").is_checked() and p2.locator("input[name=ia][value=gemini]").is_disabled())
         p2.fill("#contenu", "# Application d'essai\n\nCe que fait l'application et comment s'en servir.\n")
+        p2.check("input[name=guide]")
         for c in p2.locator("input[name=controles]:visible").all(): c.check()
         p2.set_input_files("#fichier-pj", f_docx)
         p2.wait_for_function("document.querySelector('#retour-pj') && !document.querySelector('#retour-pj').hidden")

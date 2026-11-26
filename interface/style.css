@@ -331,6 +331,17 @@ select.actif { border-color: var(--accent); color: var(--accent); background-col
 /* Formulaire « Proposer un projet » */
 .page-formulaire { max-width: 860px; }
 .page-formulaire .chapeau { font-size: 18px; }
+.encart-guide { margin: 18px 0 8px; padding: 22px 26px 24px; border: 3px solid var(--vert); border-radius: var(--rayon); background: color-mix(in srgb, var(--vert) 12%, var(--surface)); box-shadow: 0 0 0 6px color-mix(in srgb, var(--vert) 14%, transparent); }
+.encart-guide h2 { margin: 4px 0 10px; font-size: clamp(22px, 3vw, 28px); line-height: 1.2; }
+.encart-etape { display: inline-block; margin: 0; padding: 3px 12px; border-radius: 999px; background: var(--vert); color: #FFFFFF; font-weight: 700; font-size: 14px; letter-spacing: .02em; }
+.encart-guide p { max-width: 70ch; }
+.encart-pas { margin: 14px 0 4px; padding-left: 24px; display: flex; flex-direction: column; gap: 6px; max-width: 70ch; }
+.bouton.bouton-guide { min-height: 60px; padding: 0 30px; font-size: clamp(18px, 2.4vw, 22px); background: var(--vert); border-color: var(--vert); color: #FFFFFF; }
+.bouton.bouton-guide:hover { color: #FFFFFF; }
+.encart-guide .telechargement { margin: 14px 0 6px; }
+.encart-guide .telechargement .bouton.secondaire { color: var(--encre); }
+.etape-formulaire { margin: 30px 0 8px; font-size: clamp(20px, 2.6vw, 24px); padding-top: 14px; border-top: 2px solid var(--trait); }
+.case-guide { padding: 12px 16px; border-radius: var(--rayon); border: 2px solid var(--vert); background: color-mix(in srgb, var(--vert) 10%, transparent); font-weight: 600; }
 .avis-regle { padding: 12px 16px; border-radius: var(--rayon); background: var(--alerte-fond); color: var(--alerte-texte); }
 .avis-regle a { color: inherit; }
 .formulaire { display: flex; flex-direction: column; gap: 28px; margin-top: 24px; }
@@ -453,3 +464,7 @@ textarea.saisie { resize: vertical; line-height: 1.5; }
 .verif-message.info { border-left-color: var(--vert); background: color-mix(in srgb, var(--vert) 10%, var(--surface)); }
 .verif-message[hidden] { display: none; }
 .ecran-verif .ecran-gros { font-size: clamp(22px, 3.4vw, 30px); }
+
+/* Encart du guide : texte sombre sur le vert clair du thème sombre (contraste) */
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .bouton.bouton-guide, :root:not([data-theme="light"]) .bouton.bouton-guide:hover, :root:not([data-theme="light"]) .encart-etape { color: #0F1522; } }
+:root[data-theme="dark"] .bouton.bouton-guide, :root[data-theme="dark"] .bouton.bouton-guide:hover, :root[data-theme="dark"] .encart-etape { color: #0F1522; }
