@@ -2,9 +2,19 @@
 
 Tout le monde peut proposer un projet, sans compte et sans installer quoi que ce soit. Chaque proposition est relue avant d'apparaître sur le site.
 
+## D'abord : faire mettre votre projet aux normes par Claude
+
+Avant de déposer, passez votre projet par le **guide de mise aux normes** : il donne à Claude toutes les consignes pour corriger votre projet à votre place (données réelles, noms, adresses, code qui accède au réseau, ressources distantes d'une application…), vous expliquer chaque changement et vous proposer des aménagements.
+
+1. Téléchargez le [guide de mise aux normes](guide-mise-aux-normes.md) (ou installez-le comme skill : [preparer-depot.zip](preparer-depot.zip)).
+2. Ouvrez une conversation avec Claude, joignez le guide et votre projet, puis écrivez : « Mets mon projet aux normes de la Bibliothèque IA Terre. »
+3. Récupérez les fichiers corrigés et utilisez-les pour le formulaire. Le formulaire vous demande de confirmer cette étape.
+
+Le guide réduit les refus ; il ne remplace pas la relecture humaine qui suit chaque dépôt.
+
 ## Proposer un projet
 
-1. Ouvrez la page [Proposer un projet](proposer.html).
+1. Ouvrez la page [Proposer un projet](proposer.html), après avoir fait passer votre projet par le guide ci-dessus.
 2. Remplissez les champs obligatoires : titre, pseudo, résumé et IA testées.
 3. Ajoutez le contenu : glissez votre fichier dans le premier cadre (prompt ou instructions en `.md` ou `.txt`, script en `.py`, skill en `.zip` ou `SKILL.md`), ou copiez-collez son texte. Pour un skill en `.zip`, seul `SKILL.md` est envoyé : si votre skill contient d'autres fichiers, dites-le dans le résumé.
 4. Si votre projet a des documents liés (modèle, fiche, tableau), glissez-les dans le second cadre, « Pièces jointes » : Word (`.docx`), Excel (`.xlsx`), PowerPoint (`.pptx`), PDF ou page HTML autonome (`.html`), 10 fichiers et 15 Mo au maximum. Une page HTML (un petit outil, par exemple) doit fonctionner hors ligne : tout appel réseau ou ressource distante est refusé, et le site ne la publie que dans une archive `.zip`. Les anciens formats (`.doc`, `.xls`, `.ppt`), les fichiers à macros, protégés par mot de passe ou contenant des objets incorporés sont refusés. Si un document ne contient que du texte, préférez le coller dans le champ du contenu (ou en `.md`) : c'est plus léger.

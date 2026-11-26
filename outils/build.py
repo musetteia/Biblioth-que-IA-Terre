@@ -534,17 +534,48 @@ class Constructeur:
             corps = rendre((RACINE / fichier).read_text(encoding="utf-8"))
             for f, cible in liens.items():
                 corps = corps.replace('href="%s"' % f, 'href="%s"' % cible)
+            corps = corps.replace('href="guide-mise-aux-normes.md"', 'href="../telechargements/guide-mise-aux-normes.md" download')
+            corps = corps.replace('href="preparer-depot.zip"', 'href="../telechargements/preparer-depot.zip" download')
             contenu = '<article class="doc doc-page">%s</article>' % corps
             self.page(SITE / "pages" / ("%s.html" % slug), "%s — %s" % (titre, self.site["nom"]), contenu, "../", slug, classe="page-doc")
 
+    def copier_guide(self):
+        """Guide de mise aux normes pour Claude : un .md à joindre à une conversation, et le même texte en skill installable (.zip)."""
+        source = RACINE / "guide-contributeur" / "preparer-depot" / "SKILL.md"
+        cible = SITE / "telechargements"
+        cible.mkdir(exist_ok=True)
+        octets = source.read_bytes()
+        (cible / "guide-mise-aux-normes.md").write_bytes(octets)
+        with zipfile.ZipFile(str(cible / "preparer-depot.zip"), "w", zipfile.ZIP_DEFLATED) as z:
+            info = zipfile.ZipInfo("preparer-depot/SKILL.md", date_time=(2026, 1, 1, 0, 0, 0))
+            info.compress_type = zipfile.ZIP_DEFLATED
+            info.external_attr = 0o644 << 16
+            z.writestr(info, octets)
+
     def construire_proposer(self):
+        self.copier_guide()
         intro = (
             "Vous avez un prompt, un skill, un script ou un projet qui sert ? Partagez-le en remplissant ce formulaire. "
             "Pas de compte, pas d'installation : glissez votre fichier (et vos pièces jointes éventuelles) ou collez votre texte. Rien ne part avant que vous cliquiez sur « Envoyer » et confirmiez votre adresse professionnelle par un code reçu par courriel. "
             "Utilisez uniquement des exemples fictifs."
         )
         contenu = (
-            '<article class="doc doc-page page-formulaire"><h1>Proposer un projet</h1><p class="chapeau">%s</p>'
+            '<article class="doc doc-page page-formulaire"><h1>Proposer un projet</h1>'
+            '<section class="encart-guide" aria-labelledby="guide-titre">'
+            '<p class="encart-etape">Étape 1 sur 2 · à ne pas sauter</p>'
+            '<h2 id="guide-titre">D\'abord, faites mettre votre projet aux normes par Claude</h2>'
+            '<p>Un projet qui ne respecte pas les règles de sécurité est refusé ou renvoyé à son auteur. Ce guide donne à Claude toutes les consignes pour <strong>corriger votre projet à votre place</strong>, '
+            'vous expliquer chaque changement et vous proposer des aménagements. Cinq minutes.</p>'
+            '<p class="telechargement">'
+            '<a class="bouton bouton-guide" href="../telechargements/guide-mise-aux-normes.md" download>Télécharger le guide (.md)</a> '
+            '<a class="bouton secondaire" href="../telechargements/preparer-depot.zip" download>Ou l\'installer comme skill (.zip)</a></p>'
+            '<ol class="encart-pas">'
+            '<li><b>Téléchargez le guide</b> avec le bouton ci-dessus.</li>'
+            '<li><b>Ouvrez une conversation avec Claude</b>, joignez le guide et votre projet, puis écrivez : « Mets mon projet aux normes de la Bibliothèque IA Terre. »</li>'
+            '<li><b>Récupérez les fichiers corrigés</b>, puis remplissez le formulaire ci-dessous avec eux (étape 2).</li>'
+            '</ol>'
+            '</section>'
+            '<h2 class="etape-formulaire">Étape 2 sur 2 : remplir le formulaire</h2><p class="chapeau">%s</p>'
             '<p class="avis-regle"><strong>Avant de commencer :</strong> aucune donnée réelle, aucun nom, aucune adresse. '
             'Si une mention de protection, un nom de personne, une adresse de messagerie, un numéro de téléphone ou une clé se glisse dans votre texte, '
             'il sera retiré automatiquement avant l\'envoi : votre dépôt ne sera pas refusé. Les <a href="regles.html">règles de publication</a> expliquent pourquoi.</p>'
