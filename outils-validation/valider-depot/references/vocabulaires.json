@@ -3,7 +3,8 @@
     "prompt": "Prompt",
     "skill": "Skill",
     "projet": "Projet",
-    "script": "Script"
+    "script": "Script",
+    "application": "Application"
   },
   "usage": {
     "redaction": "Rédaction",
@@ -45,12 +46,17 @@
     "aucun-nom-adresse": "Aucun nom de personne, adresse ni identifiant.",
     "aucun-appel-reseau": "Aucun script ne contacte un service extérieur.",
     "aucune-donnee-protegee": "Aucune information protégée ni non publique : tout fait réel vient d'une source ouverte.",
-    "sources-citees": "Chaque fait réel renvoie à une source ouverte datée, avec son lien."
+    "sources-citees": "Chaque fait réel renvoie à une source ouverte datée, avec son lien.",
+    "seul-appel-claude": "La seule connexion de l'application est l'appel à Claude, par les services de l'artefact : aucun autre site."
   },
   "filiation": {
     "original": "Original",
     "adaptation": "Adaptation de",
     "fusion": "Fusion de",
     "version-simplifiee": "Version simplifiée de"
+  },
+  "capacites": {
+    "sample": "Appel à Claude (l'application fait jouer ou répondre Claude)",
+    "db": "Base de données (l'application enregistre des données chez l'utilisateur)"
   }
 }

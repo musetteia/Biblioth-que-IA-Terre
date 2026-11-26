@@ -14,13 +14,15 @@
     prompt: 'Un texte à coller dans une conversation avec une IA.',
     skill: 'Une compétence packagée, que certains outils savent charger.',
     projet: 'Des consignes et des documents pour un espace de travail dédié.',
-    script: 'Un petit programme Python qui travaille sur des fichiers.'
+    script: 'Un petit programme Python qui travaille sur des fichiers.',
+    application: 'Une page web avec ses fichiers (jeu, outil), qui s\'installe dans le Claude de chacun.'
   };
   var CONTENU = {
     prompt: ['Le prompt', 'Le texte du prompt, tel que l\'utilisateur le collera dans l\'IA : glissez votre fichier dans le cadre ci-dessous, ou collez le texte.'],
     projet: ['Les instructions du projet', 'Les instructions à donner à l\'IA (étape par étape, avec les garde-fous) : glissez votre fichier dans le cadre ci-dessous, ou collez le texte.'],
     skill: ['Le contenu du skill', 'Glissez le .zip du skill ou son fichier SKILL.md dans le cadre ci-dessous, ou collez le contenu de SKILL.md. L\'en-tête (nom, description) sera ajouté si vous l\'oubliez.'],
-    script: ['Le code Python', 'Le code complet : glissez votre fichier .py dans le cadre ci-dessous, ou collez le code. Il ne doit utiliser aucun accès réseau ni lancer de commande système.']
+    script: ['Le code Python', 'Le code complet : glissez votre fichier .py dans le cadre ci-dessous, ou collez le code. Il ne doit utiliser aucun accès réseau ni lancer de commande système.'],
+    application: ['Le mode d\'emploi de l\'application', 'Ce que fait l\'application et comment s\'en servir (votre LISEZMOI), en texte : collez-le ou glissez-le dans le cadre ci-dessous. L\'application elle-même se dépose plus bas, dans « Pièces jointes », en un seul fichier .zip (page index.html et ses fichiers, sans aucune adresse distante).']
   };
 
   // ---- petits outils DOM ---------------------------------------------------
@@ -76,8 +78,18 @@
 
   var attestations = el('div', { classe: 'attestations' });
   Object.keys(V.controles).forEach(function (k) {
-    attestations.appendChild(el('label', { classe: 'case' }, [el('input', { type: 'checkbox', name: 'controles', value: k }), el('span', { texte: V.controles[k] })]));
+    attestations.appendChild(el('label', { classe: 'case', 'data-engagement': k }, [el('input', { type: 'checkbox', name: 'controles', value: k }), el('span', { texte: V.controles[k] })]));
   });
+  // Capacités demandées par une application (cases visibles seulement pour ce type).
+  var capaBoites = el('div', { classe: 'choix-ia' });
+  Object.keys(V.capacites || {}).forEach(function (k) {
+    capaBoites.appendChild(el('label', { classe: 'case' }, [el('input', { type: 'checkbox', name: 'capacites', value: k }), el('span', { texte: V.capacites[k] })]));
+  });
+  var champCapacites = el('div', { classe: 'champ', id: 'champ-capacites', hidden: 'hidden' }, [
+    el('span', { classe: 'champ-titre', id: 'capacites-titre' }, [el('span', { texte: 'Ce que l\'application demande à Claude' }), el('span', { classe: 'requis', texte: ' (obligatoire)' })]),
+    el('p', { classe: 'champ-aide', texte: 'L\'application s\'installe dans le Claude de chaque utilisateur : cochez ce dont elle a besoin (appel à Claude, enregistrement de données). Elle utilisera son compte et son forfait.' }),
+    capaBoites
+  ]);
 
   var contenuLabel = el('span', { id: 'contenu-titre' });
   var contenuAide = el('p', { classe: 'champ-aide', id: 'contenu-aide' });
@@ -96,11 +108,11 @@
 
   // Pièces jointes : documents Word, Excel, PowerPoint ou PDF liés au projet. Lus dans ce navigateur, contrôlés
   // une première fois ici, puis par la boîte de dépôt, par le validateur (skill) et par le robot de la bibliothèque.
-  var choixPj = el('input', { type: 'file', id: 'fichier-pj', classe: 'sr-only', tabindex: '-1', multiple: 'multiple', accept: '.docx,.xlsx,.pptx,.pdf,.html,.htm' });
+  var choixPj = el('input', { type: 'file', id: 'fichier-pj', classe: 'sr-only', tabindex: '-1', multiple: 'multiple', accept: '.docx,.xlsx,.pptx,.pdf,.html,.htm,.zip' });
   var boutonPj = el('button', { type: 'button', classe: 'bouton secondaire', id: 'choisir-pj', texte: 'Choisir des fichiers' });
   var depotPj = el('div', { classe: 'zone-depot', id: 'zone-depot-pj' }, [
     el('p', { classe: 'zone-depot-titre', texte: 'Glissez ici vos pièces jointes' }),
-    el('p', { classe: 'zone-depot-aide', texte: 'Word (.docx), Excel (.xlsx), PowerPoint (.pptx), PDF ou page HTML autonome (.html). 10 fichiers et 15 Mo au maximum en tout. Les macros, objets incorporés, liens vers d\'autres fichiers et mots de passe sont refusés. Une page HTML doit fonctionner hors ligne : tout appel réseau ou ressource distante est refusé, et la page n\'est publiée que dans une archive .zip. Si un document ne contient que du texte, collez plutôt ce texte dans le champ du contenu.' }),
+    el('p', { classe: 'zone-depot-aide', texte: 'Word (.docx), Excel (.xlsx), PowerPoint (.pptx), PDF ou page HTML autonome (.html). Pour une application : un seul fichier .zip (la page index.html et ses fichiers, sans adresse distante : ni CDN, ni police en ligne). 10 fichiers et 15 Mo au maximum en tout. Les macros, objets incorporés, liens vers d\'autres fichiers et mots de passe sont refusés. Une page HTML doit fonctionner hors ligne : tout appel réseau ou ressource distante est refusé, et la page n\'est publiée que dans une archive .zip. Si un document ne contient que du texte, collez plutôt ce texte dans le champ du contenu.' }),
     boutonPj, choixPj
   ]);
   var retourPj = el('div', { classe: 'retour-fichier', id: 'retour-pj', role: 'status', 'aria-live': 'polite', hidden: 'hidden' });
@@ -118,7 +130,8 @@
       champ('auteur', 'Pseudo ou prénom', 'Pas de nom complet ni d\'unité (un prénom et un nom seraient retirés).', ligne('auteur'), true),
       champ('resume', 'Résumé', 'Deux ou trois phrases : ce que fait le projet et pour qui.', zone(3), true),
       el('div', { classe: 'champ' }, [el('span', { classe: 'champ-titre', id: 'type-titre', texte: 'Type de projet' }), typeRadios]),
-      el('div', { classe: 'champ' }, [el('span', { classe: 'champ-titre', id: 'ia-titre' }, [el('span', { texte: 'Testé avec' }), el('span', { classe: 'requis', texte: ' (obligatoire)' })]), el('p', { classe: 'champ-aide', texte: 'Cochez les IA avec lesquelles vous l\'avez testé. « Toutes les IA » si le projet est générique.' }), iaBoites])
+      el('div', { classe: 'champ' }, [el('span', { classe: 'champ-titre', id: 'ia-titre' }, [el('span', { texte: 'Testé avec' }), el('span', { classe: 'requis', texte: ' (obligatoire)' })]), el('p', { classe: 'champ-aide', texte: 'Cochez les IA avec lesquelles vous l\'avez testé. « Toutes les IA » si le projet est générique.' }), iaBoites]),
+      champCapacites
     ]),
     section('2. Le contenu (obligatoire)', 'C\'est le cœur du projet : ce que les camarades vont copier.', [
       el('div', { classe: 'champ' }, [el('label', { 'for': 'contenu', classe: 'champ-titre' }, [contenuLabel, el('span', { classe: 'requis', texte: ' (obligatoire)' })]), contenuAide, depot, retourFichier, contenuZone]),
@@ -217,7 +230,7 @@
     });
   }
   function etat() {
-    return {
+    var o = {
       format: 'bibliotheque-ia-terre/proposition', version: 1,
       titre: valeur('titre'), resume: valeur('resume'), type: typeChoisi(),
       usage: valeur('usage'), niveau: valeur('niveau'), langue: valeur('langue'),
@@ -225,8 +238,10 @@
       probleme: valeur('probleme'), donne: valeur('donne'), recoit: valeur('recoit'), limites: valeur('limites'),
       contenu: contenuZone.value.trim(), etapes: lireEtapes(),
       exemple_entree: valeur('exemple_entree'), exemple_sortie: valeur('exemple_sortie'),
-      controles: coches('controles')
+      controles: coches('controles').filter(function (k) { return k !== (typeChoisi() === 'application' ? 'aucun-appel-reseau' : 'seul-appel-claude'); })
     };
+    if (typeChoisi() === 'application') { o.capacites = coches('capacites'); }
+    return o;
   }
   function appliquer(s) {
     ['titre', 'resume', 'usage', 'niveau', 'langue', 'etiquettes', 'auteur', 'probleme', 'donne', 'recoit', 'limites', 'exemple_entree', 'exemple_sortie', 'contact'].forEach(function (id) {
@@ -235,6 +250,7 @@
     var r = formulaire.querySelector('input[name=type][value="' + s.type + '"]'); if (r) { r.checked = true; }
     formulaire.querySelectorAll('input[name=ia]').forEach(function (c) { c.checked = (s.ia_compatibles || []).indexOf(c.value) >= 0; });
     formulaire.querySelectorAll('input[name=controles]').forEach(function (c) { c.checked = (s.controles || []).indexOf(c.value) >= 0; });
+    formulaire.querySelectorAll('input[name=capacites]').forEach(function (c) { c.checked = (s.capacites || []).indexOf(c.value) >= 0; });
     if (typeof s.contenu === 'string') { contenuZone.value = s.contenu; }
     etapesZone.textContent = '';
     var etapes = (s.etapes && s.etapes.length) ? s.etapes : [{}, {}];
@@ -245,6 +261,21 @@
     var t = CONTENU[typeChoisi()];
     contenuLabel.textContent = t[0];
     contenuAide.textContent = t[1];
+    majApplication();
+  }
+  // Une application : Claude seul, capacités à cocher, engagement « seul appel : Claude » à la place de « aucun appel réseau ».
+  function majApplication() {
+    var app = typeChoisi() === 'application';
+    champCapacites.hidden = !app;
+    formulaire.querySelectorAll('[data-engagement]').forEach(function (l) {
+      var k = l.getAttribute('data-engagement');
+      var masque = app ? k === 'aucun-appel-reseau' : k === 'seul-appel-claude';
+      l.hidden = masque;
+      if (masque) { l.querySelector('input').checked = false; }
+    });
+    formulaire.querySelectorAll('input[name=ia]').forEach(function (c) {
+      if (app) { c.checked = c.value === 'claude'; c.disabled = c.value !== 'claude'; } else { c.disabled = false; }
+    });
   }
 
   // ---- brouillon (confort : ce navigateur seulement) ---------------------
@@ -281,6 +312,11 @@
     });
     if (s.etapes.length === 1) { p.push({ id: null, texte: 'Une seule étape est remplie : il en faut au moins deux pour le schéma. Ajoutez-en une, ou videz celle-ci pour passer cette partie.' }); }
     if (s.controles.length < 4) { p.push({ id: null, texte: 'Les quatre engagements doivent être cochés.' }); }
+    if (s.type !== 'application' && PJ.some(function (x) { return extension(x.nom) === 'zip'; })) { p.push({ id: 'pj-titre', texte: 'Une archive .zip ne se dépose que pour une application : retirez-la ou choisissez le type « Application ».' }); }
+    if (s.type === 'application') {
+      if (!s.capacites.length) { p.push({ id: 'capacites-titre', texte: 'Cochez ce que l\'application demande à Claude (au moins une capacité).' }); }
+      if (PJ.length !== 1 || extension(PJ[0].nom) !== 'zip') { p.push({ id: 'pj-titre', texte: 'Une application se dépose en pièce jointe, dans un seul fichier .zip.' }); }
+    }
     if (s.etiquettes.split(',').filter(function (x) { return x.trim(); }).length > 5) { p.push({ id: 'etiquettes', texte: '5 mots-clés au maximum.' }); }
     return p;
   }
@@ -765,7 +801,7 @@
 
 
   // ---- pièces jointes ----------------------------------------------------------------
-  var PJ_EXT = ['docx', 'xlsx', 'pptx', 'pdf', 'html', 'htm'];
+  var PJ_EXT = ['docx', 'xlsx', 'pptx', 'pdf', 'html', 'htm', 'zip'];   // .zip : seulement pour une application
   var PJ_ANCIENS = { doc: 'Word', xls: 'Excel', ppt: 'PowerPoint', dot: 'Word', xlt: 'Excel', pps: 'PowerPoint' };
   var PJ_MACROS = ['docm', 'xlsm', 'pptm', 'dotm', 'xltm', 'potm', 'ppsm', 'xlam', 'ppam', 'sldm'];
   var PJ_MAX_TOTAL = 15 * 1024 * 1024, PJ_MAX_NB = 10;
@@ -822,6 +858,12 @@
     if (PJ_MACROS.indexOf(ext) >= 0) { return 'format à macros : refusé. Enregistrez-le sans macros.'; }
     if (PJ_EXT.indexOf(ext) < 0) { return 'type non accepté (.' + (ext || '?') + '). Acceptés : .docx, .xlsx, .pptx, .pdf, .html.'; }
     if (!o.length) { return 'fichier vide.'; }
+    if (ext === 'zip') {
+      if (typeChoisi() !== 'application') { return 'une archive .zip n\'est acceptée que pour le type « Application ». Choisissez ce type, ou déposez le fichier lui-même.'; }
+      if (o[0] !== 0x50 || o[1] !== 0x4B) { return 'ce n\'est pas une vraie archive .zip.'; }
+      return null;   // le contenu de l'archive est contrôlé à la réception puis par le validateur
+    }
+    if (typeChoisi() === 'application') { return 'une application se dépose dans un seul fichier .zip.'; }
     if (ext === 'html' || ext === 'htm') { return controleHtml(o); }
     var brut = new TextDecoder('latin1').decode(o);
     if (ext === 'pdf') {
@@ -857,6 +899,7 @@
     liste.forEach(function (f) {
       suite = suite.then(function () {
         if (PJ.length >= PJ_MAX_NB) { refus.push('« ' + f.name + ' » : 10 fichiers au maximum.'); return; }
+        if (typeChoisi() === 'application' && PJ.length >= 1) { refus.push('« ' + f.name + ' » : une application se dépose en un seul fichier .zip.'); return; }
         if (totalPj() + f.size > PJ_MAX_TOTAL) { refus.push('« ' + f.name + ' » : il dépasserait 15 Mo au total.'); return; }
         return lireOctets(f).then(function (tampon) {
           var motif = controlePj(f.name, tampon);

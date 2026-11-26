@@ -20,7 +20,7 @@ TAILLE_MAX_FICHIER = 1_000_000  # octets (500 000 caractères de texte au maximu
 
 # Pièces jointes (documents Office, PDF et pages HTML autonomes) : uniquement dans projets/<id>/pieces-jointes/, jamais lues comme du texte.
 DOSSIER_PJ = "pieces-jointes"
-EXTENSIONS_PJ = {".docx", ".xlsx", ".pptx", ".pdf", ".html", ".htm"}
+EXTENSIONS_PJ = {".docx", ".xlsx", ".pptx", ".pdf", ".html", ".htm", ".zip"}   # .zip : uniquement pour le type « application »
 
 
 def est_piece_jointe(rel):
@@ -34,7 +34,16 @@ CHAMPS_OBLIGATOIRES = [
     "statut", "version", "donnees", "filiation", "licence", "controles",
     "auteur", "relu_par",
 ]
-CHAMPS_FACULTATIFS = ["version_plus_recente", "etiquettes", "validation_ia"]
+CHAMPS_FACULTATIFS = ["version_plus_recente", "etiquettes", "validation_ia", "capacites"]
+
+# Engagements attendus : les quatre d'origine ; pour une application, « seul-appel-claude » remplace « aucun-appel-reseau »
+# (l'application appelle Claude par les services de l'artefact, et rien d'autre).
+CONTROLES_BASE = ["aucune-donnee-reelle", "exemples-fictifs", "aucun-nom-adresse", "aucun-appel-reseau"]
+CONTROLES_APPLICATION = ["aucune-donnee-reelle", "exemples-fictifs", "aucun-nom-adresse", "seul-appel-claude"]
+
+
+def controles_requis(type_projet):
+    return list(CONTROLES_APPLICATION if type_projet == "application" else CONTROLES_BASE)
 
 
 class ErreurFiche(Exception):

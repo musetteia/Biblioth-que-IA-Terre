@@ -176,7 +176,7 @@ var MAX_OCTETS_SANS_PJ = 1100000;            // longueur du texte du dépôt une
 var MAX_OCTETS_DEPOT = 22 * 1024 * 1024;     // 15 Mo de pièces jointes, encodées en base64, plus le texte
 var MAX_PJ_OCTETS = 15 * 1024 * 1024;
 var MAX_PJ_NOMBRE = 10;
-var EXT_PJ = { docx: 'PK', xlsx: 'PK', pptx: 'PK', pdf: '%PDF', html: '<', htm: '<' };   // html : page autonome, contrôlée à fond par le skill de validation
+var EXT_PJ = { docx: 'PK', xlsx: 'PK', pptx: 'PK', pdf: '%PDF', html: '<', htm: '<', zip: 'PK' };   // zip : uniquement pour une application (archive contrôlée à fond par le skill)   // html : page autonome, contrôlée à fond par le skill de validation
 var MAX_PAR_HEURE = 30;       // dépôts acceptés par heure, tous émetteurs confondus
 var MAX_DEPOTS_PAR_ADRESSE_JOUR = 6;
 var MAX_CODES_PAR_ADRESSE_HEURE = 3;
@@ -397,8 +397,12 @@ function nomFichier_(titre) {
 }
 
 /** Contrôle côté serveur des pièces jointes : nombre, taille, type annoncé, signature, empreinte. L'analyse approfondie est faite par le skill. */
-function controlerPj_(liste) {
-  if (liste == null || (Array.isArray(liste) && !liste.length)) { return { ok: true, pj: [] }; }
+function controlerPj_(liste, type) {
+  var application = type === 'application';
+  if (liste == null || (Array.isArray(liste) && !liste.length)) {
+    return application ? { ok: false, erreur: 'Une application se dépose avec son archive .zip en pièce jointe.' } : { ok: true, pj: [] };
+  }
+  if (application && (!Array.isArray(liste) || liste.length !== 1)) { return { ok: false, erreur: 'Une application se dépose dans un seul fichier .zip.' }; }
   if (!Array.isArray(liste) || liste.length > MAX_PJ_NOMBRE) { return { ok: false, erreur: 'Trop de pièces jointes (maximum ' + MAX_PJ_NOMBRE + ').' }; }
   var total = 0, sortie = [];
   for (var i = 0; i < liste.length; i++) {
@@ -409,6 +413,8 @@ function controlerPj_(liste) {
     var m = /\.([A-Za-z0-9]{2,5})$/.exec(x.nom);
     var ext = m ? m[1].toLowerCase() : '';
     if (!EXT_PJ.hasOwnProperty(ext)) { return { ok: false, erreur: 'Type de pièce jointe non accepté : ' + x.nom.slice(0, 60) + ' (acceptés : .docx .xlsx .pptx .pdf .html).' }; }
+    if (ext === 'zip' && !application) { return { ok: false, erreur: 'Une archive .zip n\'est acceptée que pour le type « Application » : ' + x.nom.slice(0, 60) }; }
+    if (application && ext !== 'zip') { return { ok: false, erreur: 'Une application se dépose dans un seul fichier .zip : ' + x.nom.slice(0, 60) }; }
     if (!/^[A-Za-z0-9+\/]*={0,2}$/.test(x.contenu_b64) || x.contenu_b64.length % 4 !== 0) { return { ok: false, erreur: 'Pièce jointe illisible : ' + x.nom.slice(0, 60) }; }
     var octets = Utilities.base64Decode(x.contenu_b64);
     total += octets.length;
@@ -461,7 +467,7 @@ function traiter_(enveloppe) {
   } finally { verrou.releaseLock(); }
   if (limiteAtteinte_()) { return { ok: false, erreur: 'Trop de dépôts en ce moment. Réessayez dans une heure.' }; }
 
-  var controle = controlerPj_(pjBrut);
+  var controle = controlerPj_(pjBrut, p.type);
   if (!controle.ok) { return { ok: false, erreur: controle.erreur }; }
 
   var props = PropertiesService.getScriptProperties();

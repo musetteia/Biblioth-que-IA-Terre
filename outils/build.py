@@ -39,6 +39,7 @@ _TRAITS = {
     "skill": '<path d="M12 3.5l8.5 4.5L12 12.5 3.5 8z"/><path d="M3.5 12L12 16.5 20.5 12"/><path d="M3.5 16L12 20.5 20.5 16"/>',
     "projet": '<path d="M3.5 7a1.5 1.5 0 0 1 1.5-1.5h4.5l2 2.5H19a1.5 1.5 0 0 1 1.5 1.5v8.5A1.5 1.5 0 0 1 19 19.5H5A1.5 1.5 0 0 1 3.5 18z"/>',
     "script": '<path d="M8.5 8L4.5 12l4 4M15.5 8l4 4-4 4M13.5 5.5l-3 13"/>',
+    "application": '<rect x="3.5" y="5" width="17" height="14" rx="1.5"/><path d="M3.5 9h17M6.5 7h.01M9 7h.01"/>',
     "debuter": '<path d="M6 3.5h11a1 1 0 0 1 1 1v15l-3-2-3 2-3-2-3 2v-15a1 1 0 0 1 1-1z"/><path d="M9 8h6M9 11.5h6"/>',
     "regles": '<path d="M12 3.5l7 3v5.5c0 4.2-3 7.2-7 8.5-4-1.3-7-4.3-7-8.5V6.5z"/><path d="M8.8 12l2.2 2.2 4.3-4.4"/>',
     "contribuer": '<circle cx="9" cy="9" r="3"/><circle cx="17" cy="10" r="2.3"/><path d="M3.5 19c.6-3.2 2.8-5 5.5-5s4.9 1.8 5.5 5M14.5 15.2c.8-.7 1.6-1 2.5-1 2 0 3.4 1.4 3.8 3.8"/>',
@@ -58,6 +59,7 @@ DESCRIPTIONS_TYPES = {
     "skill": ("Skills", "Savoir-faire à importer dans l'IA"),
     "projet": ("Projets", "Consignes et fichiers prêts à installer"),
     "script": ("Scripts", "Petits programmes pour votre poste"),
+    "application": ("Applications", "S'installent dans votre propre Claude"),
 }
 DESCRIPTIONS_PAGES = {
     "debuter": "Installer et utiliser une solution",
@@ -210,11 +212,25 @@ class Constructeur:
                 else:
                     nom_publie = rel.name
                     (cible_pj / rel.name).write_bytes(octets)
-                    nature = rel.suffix[1:].upper()
+                    nature = "application, archive .zip" if (m["type"] == "application" and rel.suffix.lower() == ".zip") else rel.suffix[1:].upper()
                 taille = ("%.1f Mo" % (len(octets) / 1048576)) if len(octets) >= 1048576 else ("%d Ko" % max(1, round(len(octets) / 1024)))
                 lignes_pj.append('<li><a href="../pieces-jointes/%s/%s" download>%s</a> <span class="doux">(%s, %s)</span></li>'
                                  % (echapper(pid), echapper(quote(nom_publie)), echapper(nom_publie), echapper(nature), taille))
-            pieces_html = (
+            if m["type"] == "application":
+                capacites = [self.libelle("capacites", c) for c in m.get("capacites", [])]
+                pieces_html = (
+                    '<section class="encadre"><h2>Application à installer dans votre Claude</h2>'
+                    '<p>Cette application ne s\'ouvre pas depuis ce site : le site ne l\'héberge ni ne l\'exécute. Vous téléchargez l\'archive, '
+                    'puis vous la publiez comme artefact dans <strong>votre propre compte Claude</strong> en suivant l\'onglet « Installation ». '
+                    'Elle utilise alors votre compte et votre forfait, et ses données restent chez vous.</p>'
+                    + ('<p><strong>Ce que l\'application demande :</strong></p><ul>%s</ul>' % "".join("<li>%s</li>" % echapper(c) for c in capacites) if capacites else '')
+                    + '<p class="doux">L\'archive a été contrôlée à la validation : extensions autorisées uniquement, aucune adresse distante dans le code, '
+                      'aucune évaluation de texte comme du code. Un contrôle automatique ne peut pas tout prouver pour un programme : '
+                      'n\'installez que ce dont vous faites confiance à l\'origine, et relisez les explications du projet.</p>'
+                    + '<ul>%s</ul></section>' % "".join(lignes_pj)
+                )
+            else:
+              pieces_html = (
                 '<section class="encadre"><h2>Pièces jointes</h2>'
                 '<p class="doux">Documents liés à ce projet. Ils ont été contrôlés à la validation (aucune macro, aucun objet actif, aucun mot de passe) '
                 'et leurs métadonnées de personne ont été anonymisées. Ouvrez-les avec Word, Excel, PowerPoint ou un lecteur PDF, comme tout document reçu.</p>'
@@ -308,6 +324,8 @@ class Constructeur:
             facette("Type", "<span>%s</span>" % echapper(self.libelle("type", m["type"]))),
             facette("Usage", "<span>%s</span>" % echapper(self.libelle("usage", m["usage"]))),
             facette("Compatible avec", '<div class="puces">%s</div>' % "".join('<span class="puce">%s</span>' % echapper(x) for x in ia_libelles)),
+            facette("Capacités demandées", '<div class="puces">%s</div>' % "".join('<span class="puce">%s</span>' % echapper(self.libelle("capacites", c)) for c in m["capacites"]))
+            if m["type"] == "application" and m.get("capacites") else "",
             facette("Niveau", "<span>%s</span>" % echapper(self.libelle("niveau", m["niveau"]))),
             facette("Langue", "<span>%s</span>" % echapper(self.libelle("langue", m["langue"]))),
             facette("Données", "<span>%s</span>" % echapper(self.libelle("donnees", m["donnees"]))),
@@ -537,7 +555,8 @@ class Constructeur:
             "vocab": dict({k: self.vocab[k] for k in ("type", "usage", "ia", "langue", "niveau")},
                           # Le formulaire reste réservé aux exemples fictifs : seuls les quatre engagements d'origine y figurent.
                           controles={k: self.vocab["controles"][k] for k in
-                                     ("aucune-donnee-reelle", "exemples-fictifs", "aucun-nom-adresse", "aucun-appel-reseau")}),
+                                     ("aucune-donnee-reelle", "exemples-fictifs", "aucun-nom-adresse", "aucun-appel-reseau", "seul-appel-claude")},
+                          capacites=self.vocab["capacites"]),
             "contact": self.site.get("contact_propositions", "Envoyez ce fichier à la personne qui gère la bibliothèque."),
             # Adresse de la boîte de dépôt (script Google). Vide : le formulaire propose seulement le téléchargement.
             "boite": self.site.get("boite_depot", ""),

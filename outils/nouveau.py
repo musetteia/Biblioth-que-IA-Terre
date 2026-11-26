@@ -15,7 +15,7 @@ import sys
 
 from commun import MODELES, PROJETS, ErreurFiche, console_utf8, lire_projet, remplacer_champ
 
-TYPES = ("prompt", "skill", "projet", "script")
+TYPES = ("prompt", "skill", "projet", "script", "application")
 
 
 def main(argv):

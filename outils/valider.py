@@ -12,7 +12,7 @@ import re
 import sys
 
 from commun import (
-    CHAMPS_FACULTATIFS, CHAMPS_OBLIGATOIRES, EXTENSIONS_AUTORISEES, PROJETS, RACINE, SECTIONS_OBLIGATOIRES,
+    CHAMPS_FACULTATIFS, CHAMPS_OBLIGATOIRES, EXTENSIONS_AUTORISEES, controles_requis, PROJETS, RACINE, SECTIONS_OBLIGATOIRES,
     TAILLE_MAX_FICHIER, ErreurFiche, analyser_filiation, analyser_fonctionnement, analyser_installation,
     charger_vocabulaires, console_utf8, est_piece_jointe, fichiers_projet, liste_dossiers_projets, lire_projet,
 )
@@ -56,13 +56,22 @@ def _numero(texte, position):
     return texte.count("\n", 0, position) + 1
 
 
-def _verifier_pieces_jointes(rapport, dossier, pieces):
+def _verifier_pieces_jointes(rapport, dossier, pieces, meta=None):
     """Pièces jointes : mêmes contrôles que le skill valider-depot (aucune macro, aucun objet actif, aucun mot de passe…)."""
     import analyse_pj
+    meta = meta or {}
+    application = meta.get("type") == "application"
     for rel in pieces:
         if len(rel.parts) != 2:
             rapport.erreur("%s : les pièces jointes doivent être directement dans pieces-jointes/ (pas de sous-dossier)." % rel.as_posix())
-    lot = analyse_pj.analyser_lot([(r.name, (dossier / r).read_bytes()) for r in pieces])
+    lot = analyse_pj.analyser_lot([(r.name, (dossier / r).read_bytes()) for r in pieces], application=application)
+    if application:
+        declarees = set(meta.get("capacites") or []) if isinstance(meta.get("capacites"), list) else set()
+        detectees = set(lot.get("capacites_detectees") or [])
+        for c in sorted(detectees - declarees):
+            rapport.erreur("README.md : l'application utilise la capacité « %s » mais ne la déclare pas dans capacites." % c)
+        for c in sorted(declarees - detectees):
+            rapport.avertir("README.md : la capacité « %s » est déclarée mais le code ne semble pas l'utiliser (à vérifier)." % c)
     for x in lot["refus"]:
         rapport.erreur("pieces-jointes : " + x)
     for f in lot["fichiers"]:
@@ -170,8 +179,12 @@ def valider_projet(projet, tous_ids, vocab):
             # Régime « sources ouvertes » : on n'exige pas « aucune-donnee-reelle » ni « exemples-fictifs »,
             # qui seraient faux ; on exige à la place l'absence d'information protégée et la citation des sources.
             requis = ["aucune-donnee-protegee", "sources-citees", "aucun-nom-adresse"]
+            if meta.get("type") == "application":
+                requis.append("seul-appel-claude")
         else:
-            requis = ["aucune-donnee-reelle", "exemples-fictifs", "aucun-nom-adresse", "aucun-appel-reseau"]
+            requis = controles_requis(meta.get("type"))
+        if meta.get("type") == "application" and "aucun-appel-reseau" in controles:
+            rapport.erreur("README.md : « aucun-appel-reseau » est faux pour une application, qui appelle Claude : utilisez « seul-appel-claude ».")
         for c in requis:
             if c not in controles:
                 rapport.erreur("README.md : le contrôle « %s » n'est pas attesté (%s). Vérifiez le point, puis ajoutez-le à controles."
@@ -234,7 +247,7 @@ def valider_projet(projet, tous_ids, vocab):
             rapport.erreur("%s : du texte du modèle (« À remplacer ») est encore présent." % rel.as_posix())
 
     if pieces:
-        _verifier_pieces_jointes(rapport, dossier, pieces)
+        _verifier_pieces_jointes(rapport, dossier, pieces, meta)
 
     # Fichiers imposés selon le type
     t = meta.get("type")
@@ -244,6 +257,23 @@ def valider_projet(projet, tous_ids, vocab):
         rapport.erreur("Un projet de type « projet » doit contenir instructions.md.")
     if t == "script" and not any(n.endswith(".py") for n in noms):
         rapport.erreur("Un projet de type « script » doit contenir au moins un fichier .py.")
+    if t == "application":
+        archives = [p for p in pieces if p.suffix.lower() == ".zip"]
+        if len(pieces) != 1 or len(archives) != 1:
+            rapport.erreur("Un projet de type « application » doit contenir exactement une pièce jointe : l'archive .zip de l'application (pieces-jointes/).")
+        if "installation.md" not in noms:
+            rapport.erreur("Un projet de type « application » doit contenir installation.md (comment l'installer dans son propre Claude).")
+        if meta.get("ia_compatibles") != ["claude"]:
+            rapport.erreur("README.md : une application s'installe comme artefact de Claude : ia_compatibles doit valoir [claude].")
+        capacites = meta.get("capacites")
+        if not isinstance(capacites, list) or not capacites:
+            rapport.erreur("README.md : une application doit déclarer ses capacités (capacites: [sample, db], au moins une).")
+        else:
+            for c in capacites:
+                if c not in vocab["capacites"]:
+                    rapport.erreur("README.md : capacité « %s » inconnue (autorisées : %s)." % (c, ", ".join(vocab["capacites"])))
+    elif "capacites" in meta:
+        rapport.erreur("README.md : le champ « capacites » est réservé aux applications.")
     if t == "skill":
         if "SKILL.md" not in noms:
             rapport.erreur("Un projet de type « skill » doit contenir SKILL.md.")

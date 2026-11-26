@@ -142,5 +142,23 @@ for (const [nom, buf] of [['faux.html', Buffer.from('juste du texte')], ['nul.ht
   ok('refusé : ' + nom, x.ok === false && w.fichiers.length === n, x);
 }
 
+console.log('Applications (.zip)');
+const appZip = Buffer.concat([Buffer.from('PK\x03\x04'), Buffer.from('contenu de test')]);
+w = monde(PROPS()); t = jeton(w, A);
+r = w.post({ adresse: A, jeton: t, p: depot({ type: 'application', pieces_jointes: [pj('app.zip', appZip)] }) });
+ok('application avec un .zip acceptée', r.ok === true, r);
+ok('.zip conservé à l\'identique', Buffer.from(JSON.parse(w.fichiers[0].c).pieces_jointes[0].contenu_b64, 'base64').equals(appZip));
+for (const [libelle, type, pjs] of [
+  ['.zip refusé pour un prompt', 'prompt', [pj('app.zip', appZip)]],
+  ['application sans pièce jointe refusée', 'application', []],
+  ['application avec deux fichiers refusée', 'application', [pj('a.zip', appZip), pj('b.zip', appZip)]],
+  ['application avec un .html refusée', 'application', [pj('index.html', html())]],
+  ['faux .zip (texte) refusé', 'application', [pj('app.zip', Buffer.from('pas une archive'))]]
+]) {
+  w = monde(PROPS()); t = jeton(w, A);
+  const x = w.post({ adresse: A, jeton: t, p: depot({ type, pieces_jointes: pjs }) });
+  ok(libelle, x.ok === false && w.fichiers.length === 0, x);
+}
+
 console.log(echecs ? '\n' + echecs + ' ECHEC(S)' : '\nTous les tests passent.');
 process.exit(echecs ? 1 : 0);
